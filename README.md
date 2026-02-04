@@ -72,21 +72,54 @@ ARobotRallyGameMode          Pelitilakone, vuorologiikka
 - `RotateInGrid(Steps)` — kääntää kohderotaatiota 90° askelin
 - Tick-funktiossa interpoloidaan pehmeästi kohteeseen (`VInterpTo` / `RInterpTo`)
 
-## Kehityksen tila
+## Toteutussuunnitelma
 
-**Vaihe 1 (kesken)** — Perusluokat olemassa, kääntyvät, mutta eivät vielä muodosta pelattavaa kokonaisuutta.
+### Vaihe 0: Projektin luonti & rakenne — VALMIS
+- [x] UE5-projekti luotu nimellä RobotRally
+- [x] Kansiorakenne standardin mukaisesti
+- [x] Plugin-asetukset (Enhanced Input)
 
-Seuraavat askeleet:
+### Vaihe 1: Perusrakenne (C++) — KESKEN
+- [x] `ARobotPawn` — Header ja CPP, perusrakenne
+- [x] `URobotMovementComponent` — `MoveInGrid()` ja `RotateInGrid()` interpoloinnilla
+- [x] `AGridManager` — Ruudukon generointi ja tile-tarkistukset
 - [ ] GridX/GridY-synkronointi liikkeen yhteydessä
-- [ ] MovementComponent-GridManager-yhteys (validointi)
-- [ ] ProcessNextRegister() — korttien kytkentä robottien liikkeisiin
-- [ ] ARobotController (pelaajan syötteet)
-- [ ] HealthComponent (vahinko ja elämät)
-- [ ] Korttien jakelu- ja käsijärjestelmä
-- [ ] UI: ohjelmointinäkymä, HUD, korttislotit
-- [ ] Kenttävaarat: laserit, liukuhihnat, kuopat toiminnallisuutena
-- [ ] Checkpoint-keräysjärjestelmä
+- [ ] MovementComponent-GridManager-yhteys (ruudukkovalidointi: kuopat, rajat, esteet)
 - [ ] Visuaalinen debug-piirto ruudukolle
+
+### Vaihe 2: Logiikkakerros (GameMode & kortit)
+- [x] `ARobotRallyGameMode` — Tilakone (Programming/Executing/GameOver), 5 rekisteriä
+- [x] `FRobotCard` — Kortin tyyppi (ECardAction) ja prioriteetti
+- [ ] `ProcessNextRegister()` — Korttien kytkentä robottien liikkeisiin
+- [ ] `UCardDataAsset` — Data-driven lähestymistapa korteille
+- [ ] Korttien jakelu- ja käsijärjestelmä (satunnaiset kortit pelaajalle)
+- [ ] Prioriteettipohjainen suoritusjärjestys robottien välillä
+
+### Vaihe 3: Pelaajan ohjaus
+- [ ] `ARobotController` (APlayerController) — Hiiren klikkaukset ja korttisyötteet
+- [ ] `HealthComponent` — Vahinko, elämät, robotin tuhoaminen ja respawn
+- [ ] Checkpoint-keräysjärjestelmä (järjestyksessä kerättävät liput)
+
+### Vaihe 4: Kenttävaarat & ympäristö
+- [ ] Liukuhihnat — Siirtävät robottia vuoron lopussa suunnan mukaan
+- [ ] Laserit (`BP_Hazard_Laser`) — Vahingoittavat robottia rekisterin lopussa
+- [ ] Kuopat — Robotti tuhoutuu päätyessään kuoppaan
+- [ ] Törmäystarkistukset robottien välillä (työntö)
+
+### Vaihe 5: UI & käyttöliittymä
+- [ ] `WBP_ProgrammingDeck` — Korttien valintanäkymä (9 korttia kädessä, 5 rekisteriin)
+- [ ] `WBP_CardSlot` — Yksittäisen kortin UI-esitys
+- [ ] `WBP_HUD` — Terveys, elämät, nykyinen pelivaihe, checkpoint-edistyminen
+
+### Vaihe 6: Sisältö & viimeistely
+- [ ] `/Content/RobotRally/Maps/` — Pelitaso(t)
+- [ ] `/Content/RobotRally/Blueprints/` — C++-pohjaiset Blueprint-lapsiluokat
+- [ ] `/Content/RobotRally/Data/` — DataTablet ja DataAssetit ruudukoille
+- [ ] Ääniefektit ja visuaaliset efektit (liike, vahinko, checkpoint)
+
+### Varmistussuunnitelma
+- [ ] Automaattiset testit: GridManager-koordinaattimuunnokset, törmäystarkistukset
+- [ ] Manuaalinen testaus: korttien valinta, robottien liike, vaarat, checkpoint-keräys
 
 ## Lisenssi
 
