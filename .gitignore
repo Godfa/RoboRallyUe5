@@ -361,3 +361,15 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/.claude/settings.local.json
+
+# Claude Code temp files
+tmpclaude-*
+
+# Unreal Engine 5
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+*.sln
+*.target

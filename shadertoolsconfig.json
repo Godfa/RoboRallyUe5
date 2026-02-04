@@ -1,0 +1,9 @@
+{
+  "HLSLVersion": "2021",
+  "IncludeDirs": [
+    "./Source/RobotRally"
+  ],
+  "VirtualDirs": {
+    "/Engine": "C:/Program Files/Epic Games/UE_5.7/Engine/Shaders"
+  }
+}

@@ -1,0 +1,30 @@
+# Unreal Engine EditorConfig
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = tab
+indent_size = 4
+
+[*.{h,cpp,cs}]
+# Unreal Engine Specific Rules
+cpp_indent_braces = false
+cpp_indent_multi_line_relative_to_line_start = true
+cpp_indent_within_parentheses = true
+cpp_indent_preserve_within_parentheses = true
+cpp_indent_access_specifiers = true
+cpp_indent_case_contents = true
+cpp_indent_case_labels = false
+cpp_indent_declaration_column = 0
+
+# Naming Conventions
+unreal_naming_convention = true
+
+# C# Rules (for Build.cs and Target.cs)
+[*.cs]
+indent_style = space
+indent_size = 4
