@@ -3,10 +3,17 @@
 #include "RobotPawn.h"
 #include "RobotMovementComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "DrawDebugHelpers.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
+
+#if WITH_EDITORONLY_DATA
+#include "Materials/Material.h"
+#include "Materials/MaterialExpressionVectorParameter.h"
+#endif
 
 ARobotPawn::ARobotPawn()
 {
@@ -19,6 +26,7 @@ ARobotPawn::ARobotPawn()
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCapsuleSize(30.0f, 30.0f);
+		Capsule->SetVisibility(false);
 	}
 
 	// Disable gravity and rotation control from CharacterMovementComponent
@@ -34,6 +42,41 @@ ARobotPawn::ARobotPawn()
 		CMC->bOrientRotationToMovement = false;
 	}
 
+	// Hide the default skeletal mesh (ACharacter has one)
+	if (GetMesh())
+	{
+		GetMesh()->SetVisibility(false);
+	}
+
+	// Load mesh assets
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderFinder(
+		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeFinder(
+		TEXT("/Engine/BasicShapes/Cone.Cone"));
+
+	// Body mesh - cylinder
+	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
+	BodyMesh->SetupAttachment(RootComponent);
+	if (CylinderFinder.Succeeded())
+	{
+		BodyMesh->SetStaticMesh(CylinderFinder.Object);
+	}
+	BodyMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -15.0f));
+	BodyMesh->SetRelativeScale3D(FVector(0.55f, 0.55f, 0.25f));
+	BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Direction indicator - cone pointing forward
+	DirectionIndicator = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DirectionCone"));
+	DirectionIndicator->SetupAttachment(RootComponent);
+	if (ConeFinder.Succeeded())
+	{
+		DirectionIndicator->SetStaticMesh(ConeFinder.Object);
+	}
+	DirectionIndicator->SetRelativeLocation(FVector(25.0f, 0.0f, -10.0f));
+	DirectionIndicator->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
+	DirectionIndicator->SetRelativeScale3D(FVector(0.2f, 0.2f, 0.35f));
+	DirectionIndicator->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
 	// Default starting grid position
 	GridX = 0;
 	GridY = 0;
@@ -42,6 +85,41 @@ ARobotPawn::ARobotPawn()
 void ARobotPawn::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Apply colored materials (created at runtime for proper Color parameter support)
+	UMaterialInterface* BaseMat = nullptr;
+
+#if WITH_EDITORONLY_DATA
+	UMaterial* Mat = NewObject<UMaterial>(GetTransientPackage(), NAME_None, RF_Transient);
+	Mat->MaterialDomain = MD_Surface;
+
+	UMaterialExpressionVectorParameter* ColorParam =
+		NewObject<UMaterialExpressionVectorParameter>(Mat);
+	ColorParam->ParameterName = TEXT("Color");
+	ColorParam->DefaultValue = FLinearColor::White;
+
+	UMaterialEditorOnlyData* EditorData = Mat->GetEditorOnlyData();
+	EditorData->ExpressionCollection.Expressions.Add(ColorParam);
+	EditorData->BaseColor.Expression = ColorParam;
+	EditorData->BaseColor.OutputIndex = 0;
+
+	Mat->PreEditChange(nullptr);
+	Mat->PostEditChange();
+	BaseMat = Mat;
+#endif
+
+	if (BaseMat)
+	{
+		// Body: blue
+		UMaterialInstanceDynamic* BodyMat = UMaterialInstanceDynamic::Create(BaseMat, this);
+		BodyMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.2f, 0.5f, 0.9f));
+		BodyMesh->SetMaterial(0, BodyMat);
+
+		// Direction indicator: yellow
+		UMaterialInstanceDynamic* ConeMat = UMaterialInstanceDynamic::Create(BaseMat, this);
+		ConeMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.9f, 0.8f, 0.1f));
+		DirectionIndicator->SetMaterial(0, ConeMat);
+	}
 
 	if (RobotMovement)
 	{
@@ -67,38 +145,6 @@ void ARobotPawn::BeginPlay()
 void ARobotPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-#if ENABLE_DRAW_DEBUG
-	// Draw robot as a large circle + arrow showing facing direction
-	UWorld* World = GetWorld();
-	if (World && RobotMovement)
-	{
-		FVector Pos = GetActorLocation();
-		Pos.Z = 5.0f;
-
-		// Big magenta circle for robot position
-		DrawDebugCircle(World, Pos, 40.0f, 32, FColor::Magenta, false, -1.0f, 0, 4.0f,
-			FVector(0, 1, 0), FVector(1, 0, 0), false);
-
-		// Arrow showing facing direction
-		FVector Forward = GetActorForwardVector();
-		FVector ArrowEnd = Pos + Forward * 45.0f;
-		DrawDebugDirectionalArrow(World, Pos, ArrowEnd, 25.0f, FColor::Magenta, false, -1.0f, 0, 4.0f);
-
-		// Direction label
-		const TCHAR* DirText = TEXT("?");
-		switch (RobotMovement->GetFacingDirection())
-		{
-		case EGridDirection::North: DirText = TEXT("^ N"); break;
-		case EGridDirection::East:  DirText = TEXT("> E"); break;
-		case EGridDirection::South: DirText = TEXT("v S"); break;
-		case EGridDirection::West:  DirText = TEXT("< W"); break;
-		}
-
-		FString Label = FString::Printf(TEXT("ROBOT (%d,%d) %s"), GridX, GridY, DirText);
-		DrawDebugString(World, Pos + FVector(0, 0, 15.0f), Label, nullptr, FColor::Magenta, 0.0f, true);
-	}
-#endif
 
 	// Simple keyboard input for testing
 	APlayerController* PC = Cast<APlayerController>(GetController());

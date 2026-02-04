@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Components/StaticMeshComponent.h"
 #include "GridManager.generated.h"
 
 UENUM(BlueprintType)
@@ -78,11 +79,30 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Grid")
 	bool IsValidTile(FIntVector Coords) const;
 
-	// Toggle debug grid visualization
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid|Debug")
-	bool bDrawDebugGrid = true;
+	// Set tile type and update visual
+	UFUNCTION(BlueprintCallable, Category = "Grid")
+	void SetTileType(FIntVector Coords, const FTileData& Data);
+
+	// Refresh all tile visuals from current GridMap state
+	void RefreshAllTileVisuals();
+
+	// Get color for a tile type
+	static FLinearColor GetTileColor(ETileType Type);
 
 private:
 	void InitializeGrid();
-	void DrawDebugGrid();
+	void SpawnTileMesh(FIntVector Coords, const FTileData& Data);
+	void CreateBaseMaterial();
+
+	UPROPERTY()
+	TMap<FIntVector, UStaticMeshComponent*> TileMeshes;
+
+	UPROPERTY()
+	USceneComponent* SceneRoot;
+
+	UPROPERTY()
+	UStaticMesh* CachedCubeMesh;
+
+	UPROPERTY()
+	UMaterialInterface* CachedBaseMaterial;
 };

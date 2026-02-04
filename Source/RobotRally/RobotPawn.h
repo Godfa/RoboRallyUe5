@@ -7,6 +7,7 @@
 #include "RobotPawn.generated.h"
 
 class URobotMovementComponent;
+class UStaticMeshComponent;
 
 UCLASS()
 class ROBOTRALLY_API ARobotPawn : public ACharacter
@@ -25,6 +26,13 @@ public:
 	// Movement component for grid-based logic
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot", meta = (AllowPrivateAccess = "true"))
 	URobotMovementComponent* RobotMovement;
+
+	// Visual components
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Visual")
+	UStaticMeshComponent* BodyMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Visual")
+	UStaticMeshComponent* DirectionIndicator;
 
 	// Grid coordinates
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Grid")
