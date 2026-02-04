@@ -80,6 +80,18 @@ void URobotMovementComponent::InitializeGridPosition(int32 InGridX, int32 InGrid
 	CurrentGridX = InGridX;
 	CurrentGridY = InGridY;
 	FacingDirection = InFacing;
+
+	// Sync target location/rotation with the grid position
+	if (GridManager)
+	{
+		TargetLocation = GridManager->GridToWorld(FIntVector(InGridX, InGridY, 0));
+		TargetLocation.Z = GetOwner()->GetActorLocation().Z;
+	}
+	else
+	{
+		TargetLocation = GetOwner()->GetActorLocation();
+	}
+	TargetRotation = GetOwner()->GetActorRotation();
 }
 
 void URobotMovementComponent::MoveInGrid(int32 Distance)

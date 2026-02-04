@@ -3,6 +3,7 @@
 #include "RobotRallyGameMode.h"
 #include "GridManager.h"
 #include "RobotPawn.h"
+#include "RobotMovementComponent.h"
 #include "Engine/World.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
@@ -79,7 +80,7 @@ void ARobotRallyGameMode::SetupTestScene()
 
 		// Spawn robot at grid center (5, 5)
 		FVector SpawnLocation = GridManagerInstance->GridToWorld(FIntVector(5, 5, 0));
-		SpawnLocation.Z = 50.0f;
+		SpawnLocation.Z = 30.0f;
 
 		FActorSpawnParameters RobotSpawnParams;
 		RobotSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
@@ -91,6 +92,13 @@ void ARobotRallyGameMode::SetupTestScene()
 		{
 			TestRobot->GridX = 5;
 			TestRobot->GridY = 5;
+
+			// Re-initialize movement component with correct grid position
+			// (BeginPlay ran during SpawnActor with default GridX=0, GridY=0)
+			if (TestRobot->RobotMovement)
+			{
+				TestRobot->RobotMovement->InitializeGridPosition(5, 5, EGridDirection::North);
+			}
 
 			// Have Player 0 possess the robot
 			APlayerController* PC = World->GetFirstPlayerController();
@@ -131,17 +139,16 @@ void ARobotRallyGameMode::SetupTestScene()
 
 		if (Floor)
 		{
+			Floor->SetMobility(EComponentMobility::Movable);
 			UStaticMesh* PlaneMesh = LoadObject<UStaticMesh>(nullptr,
 				TEXT("/Engine/BasicShapes/Plane.Plane"));
 			if (PlaneMesh)
 			{
 				Floor->GetStaticMeshComponent()->SetStaticMesh(PlaneMesh);
-				// Scale to cover the grid (plane is 100x100 by default, grid is Width*TileSize)
 				float ScaleX = GridManagerInstance->Width * GridManagerInstance->TileSize / 100.0f;
 				float ScaleY = GridManagerInstance->Height * GridManagerInstance->TileSize / 100.0f;
 				Floor->SetActorScale3D(FVector(ScaleX, ScaleY, 1.0f));
 			}
-			Floor->SetMobility(EComponentMobility::Movable);
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Test scene ready: Grid + Robot at (5,5). Use W/S to move, A/D to rotate."));

@@ -2,6 +2,8 @@
 
 #include "RobotPawn.h"
 #include "RobotMovementComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "DrawDebugHelpers.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
@@ -13,12 +15,23 @@ ARobotPawn::ARobotPawn()
 	// Initialize movement component
 	RobotMovement = CreateDefaultSubobject<URobotMovementComponent>(TEXT("RobotMovement"));
 
-	// Disable gravity - this is a board game, not a platformer
+	// Shrink the capsule so it doesn't interfere
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCapsuleSize(30.0f, 30.0f);
+	}
+
+	// Disable gravity and rotation control from CharacterMovementComponent
+	bUseControllerRotationYaw = false;
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationRoll = false;
+
 	if (UCharacterMovementComponent* CMC = GetCharacterMovement())
 	{
 		CMC->GravityScale = 0.0f;
 		CMC->DefaultLandMovementMode = MOVE_Flying;
 		CMC->SetMovementMode(MOVE_Flying);
+		CMC->bOrientRotationToMovement = false;
 	}
 
 	// Default starting grid position
@@ -55,11 +68,44 @@ void ARobotPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+#if ENABLE_DRAW_DEBUG
+	// Draw robot as a large circle + arrow showing facing direction
+	UWorld* World = GetWorld();
+	if (World && RobotMovement)
+	{
+		FVector Pos = GetActorLocation();
+		Pos.Z = 5.0f;
+
+		// Big magenta circle for robot position
+		DrawDebugCircle(World, Pos, 40.0f, 32, FColor::Magenta, false, -1.0f, 0, 4.0f,
+			FVector(0, 1, 0), FVector(1, 0, 0), false);
+
+		// Arrow showing facing direction
+		FVector Forward = GetActorForwardVector();
+		FVector ArrowEnd = Pos + Forward * 45.0f;
+		DrawDebugDirectionalArrow(World, Pos, ArrowEnd, 25.0f, FColor::Magenta, false, -1.0f, 0, 4.0f);
+
+		// Direction label
+		const TCHAR* DirText = TEXT("?");
+		switch (RobotMovement->GetFacingDirection())
+		{
+		case EGridDirection::North: DirText = TEXT("^ N"); break;
+		case EGridDirection::East:  DirText = TEXT("> E"); break;
+		case EGridDirection::South: DirText = TEXT("v S"); break;
+		case EGridDirection::West:  DirText = TEXT("< W"); break;
+		}
+
+		FString Label = FString::Printf(TEXT("ROBOT (%d,%d) %s"), GridX, GridY, DirText);
+		DrawDebugString(World, Pos + FVector(0, 0, 15.0f), Label, nullptr, FColor::Magenta, 0.0f, true);
+	}
+#endif
+
 	// Simple keyboard input for testing
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC) return;
-	if (RobotMovement && RobotMovement->IsMoving()) return;
-	if (RobotMovement && RobotMovement->IsRotating()) return;
+
+	bool bBusy = RobotMovement && (RobotMovement->IsMoving() || RobotMovement->IsRotating());
+	if (bBusy) return;
 
 	if (PC->WasInputKeyJustPressed(EKeys::W))
 		ExecuteMoveCommand(1);
