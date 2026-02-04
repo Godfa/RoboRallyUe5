@@ -6,23 +6,40 @@
 #include "Components/ActorComponent.h"
 #include "RobotMovementComponent.generated.h"
 
+class AGridManager;
+
+UENUM(BlueprintType)
+enum class EGridDirection : uint8
+{
+	North,	// +X
+	East,	// +Y
+	South,	// -X
+	West	// -Y
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnGridPositionChanged, int32, NewGridX, int32, NewGridY);
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class ROBOTRALLY_API URobotMovementComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
-public:	
+public:
 	URobotMovementComponent();
 
 protected:
 	virtual void BeginPlay() override;
 
-public:	
+public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	// Grid spacing (default 100 units)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
 	float GridSize = 100.0f;
+
+	// Reference to the level's GridManager for move validation
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
+	AGridManager* GridManager = nullptr;
 
 	// Move the owner robot forward or backward in the grid
 	UFUNCTION(BlueprintCallable, Category = "GridMovement")
@@ -32,11 +49,40 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GridMovement")
 	void RotateInGrid(int32 Steps);
 
+	// Initialize grid position and facing direction
+	UFUNCTION(BlueprintCallable, Category = "GridMovement")
+	void InitializeGridPosition(int32 InGridX, int32 InGridY, EGridDirection InFacing);
+
+	UFUNCTION(BlueprintPure, Category = "GridMovement")
+	int32 GetCurrentGridX() const { return CurrentGridX; }
+
+	UFUNCTION(BlueprintPure, Category = "GridMovement")
+	int32 GetCurrentGridY() const { return CurrentGridY; }
+
+	UFUNCTION(BlueprintPure, Category = "GridMovement")
+	EGridDirection GetFacingDirection() const { return FacingDirection; }
+
+	UFUNCTION(BlueprintPure, Category = "GridMovement")
+	bool IsMoving() const { return bIsMoving; }
+
+	UFUNCTION(BlueprintPure, Category = "GridMovement")
+	bool IsRotating() const { return bIsRotating; }
+
+	// Broadcast when grid coordinates change after a move
+	UPROPERTY(BlueprintAssignable, Category = "GridMovement")
+	FOnGridPositionChanged OnGridPositionChanged;
+
+	// Returns (DX, DY) delta for a given direction
+	static void GetDirectionDelta(EGridDirection Dir, int32& OutDX, int32& OutDY);
+
 private:
-	// Internally handles the smooth interpolation to the target grid position
 	FVector TargetLocation;
 	FRotator TargetRotation;
 
 	bool bIsMoving = false;
 	bool bIsRotating = false;
+
+	EGridDirection FacingDirection = EGridDirection::North;
+	int32 CurrentGridX = 0;
+	int32 CurrentGridY = 0;
 };

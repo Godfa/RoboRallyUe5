@@ -6,6 +6,9 @@
 #include "GameFramework/GameModeBase.h"
 #include "RobotRallyGameMode.generated.h"
 
+class AGridManager;
+class ARobotPawn;
+
 UENUM(BlueprintType)
 enum class ECardAction : uint8
 {
@@ -59,7 +62,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Game")
 	void StartProgrammingPhase();
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|TestScene")
+	AGridManager* GridManagerInstance;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|TestScene")
+	ARobotPawn* TestRobot;
+
 private:
 	void ProcessNextRegister();
+	void SetupTestScene();
+
 	int32 CurrentRegister = 0;
 };

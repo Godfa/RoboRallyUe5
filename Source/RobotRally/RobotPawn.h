@@ -19,7 +19,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-public:	
+public:
 	virtual void Tick(float DeltaTime) override;
 
 	// Movement component for grid-based logic
@@ -39,4 +39,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Robot|Actions")
 	void ExecuteRotateCommand(int32 Steps); // 1 = 90 deg right, -1 = 90 deg left
+
+private:
+	UFUNCTION()
+	void OnGridPositionUpdated(int32 NewGridX, int32 NewGridY);
 };

@@ -35,14 +35,16 @@ UCLASS()
 class ROBOTRALLY_API AGridManager : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	AGridManager();
 
 protected:
 	virtual void BeginPlay() override;
 
 public:
+	virtual void Tick(float DeltaTime) override;
+
 	// Grid dimensions
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
 	int32 Width = 10;
@@ -53,7 +55,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
 	float TileSize = 100.0f;
 
-	// In-memory representation of the grid (Not a UPROPERTY because TMap with custom keys can be tricky, but FIntVector is a USTRUCT)
 	UPROPERTY(VisibleAnywhere, Category = "Grid")
 	TMap<FIntVector, FTileData> GridMap;
 
@@ -69,6 +70,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Grid")
 	ETileType GetTileType(FIntVector Coords) const;
 
+	// Returns true if coordinates are within grid boundaries
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	bool IsInBounds(int32 X, int32 Y) const;
+
+	// Returns true if tile is within bounds and not a Pit
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	bool IsValidTile(FIntVector Coords) const;
+
+	// Toggle debug grid visualization
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid|Debug")
+	bool bDrawDebugGrid = true;
+
 private:
 	void InitializeGrid();
+	void DrawDebugGrid();
 };
