@@ -68,9 +68,18 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|TestScene")
 	ARobotPawn* TestRobot;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
+	TArray<FRobotCard> ProgrammedCards;
+
+	static constexpr int32 NUM_REGISTERS = 5;
+
 private:
 	void ProcessNextRegister();
 	void SetupTestScene();
+	void ExecuteCardAction(ECardAction Action);
+	void CheckMovementComplete();
+	void SetupTestCards();
 
 	int32 CurrentRegister = 0;
+	FTimerHandle MovementCheckTimerHandle;
 };

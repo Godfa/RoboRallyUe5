@@ -156,21 +156,130 @@ void ARobotRallyGameMode::StartProgrammingPhase()
 {
 	CurrentState = EGameState::Programming;
 	CurrentRegister = 0;
+	GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
+	UE_LOG(LogTemp, Log, TEXT("Returned to Programming phase. Press E to execute cards."));
 }
 
 void ARobotRallyGameMode::StartExecutionPhase()
 {
 	CurrentState = EGameState::Executing;
+	CurrentRegister = 0;
+	SetupTestCards();
+	UE_LOG(LogTemp, Log, TEXT("Starting Execution phase with %d cards."), ProgrammedCards.Num());
 	ProcessNextRegister();
 }
 
 void ARobotRallyGameMode::ProcessNextRegister()
 {
-	if (CurrentRegister >= 5)
+	if (CurrentRegister >= NUM_REGISTERS)
 	{
+		UE_LOG(LogTemp, Log, TEXT("All registers executed. Returning to Programming phase."));
 		StartProgrammingPhase();
 		return;
 	}
 
+	if (!ProgrammedCards.IsValidIndex(CurrentRegister))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No card at register %d"), CurrentRegister);
+		StartProgrammingPhase();
+		return;
+	}
+
+	FRobotCard Card = ProgrammedCards[CurrentRegister];
+	UE_LOG(LogTemp, Log, TEXT("Executing Register %d: Action %d"), CurrentRegister, static_cast<int32>(Card.Action));
+
+	ExecuteCardAction(Card.Action);
 	CurrentRegister++;
+
+	// Start timer to check when movement completes
+	GetWorld()->GetTimerManager().SetTimer(
+		MovementCheckTimerHandle,
+		this,
+		&ARobotRallyGameMode::CheckMovementComplete,
+		0.1f,
+		true);
+}
+
+void ARobotRallyGameMode::ExecuteCardAction(ECardAction Action)
+{
+	if (!TestRobot)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No TestRobot to execute card action"));
+		return;
+	}
+
+	switch (Action)
+	{
+	case ECardAction::Move1:
+		TestRobot->ExecuteMoveCommand(1);
+		break;
+	case ECardAction::Move2:
+		TestRobot->ExecuteMoveCommand(2);
+		break;
+	case ECardAction::Move3:
+		TestRobot->ExecuteMoveCommand(3);
+		break;
+	case ECardAction::MoveBack:
+		TestRobot->ExecuteMoveCommand(-1);
+		break;
+	case ECardAction::RotateRight:
+		TestRobot->ExecuteRotateCommand(1);
+		break;
+	case ECardAction::RotateLeft:
+		TestRobot->ExecuteRotateCommand(-1);
+		break;
+	case ECardAction::UTurn:
+		TestRobot->ExecuteRotateCommand(2);
+		break;
+	}
+}
+
+void ARobotRallyGameMode::CheckMovementComplete()
+{
+	if (!TestRobot || !TestRobot->RobotMovement)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
+		ProcessNextRegister();
+		return;
+	}
+
+	bool bStillMoving = TestRobot->RobotMovement->IsMoving() || TestRobot->RobotMovement->IsRotating();
+	if (!bStillMoving)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
+		ProcessNextRegister();
+	}
+}
+
+void ARobotRallyGameMode::SetupTestCards()
+{
+	ProgrammedCards.Empty();
+
+	// Test sequence: Move1, RotateRight, Move2, RotateLeft, MoveBack
+	FRobotCard Card1;
+	Card1.Action = ECardAction::Move1;
+	Card1.Priority = 100;
+	ProgrammedCards.Add(Card1);
+
+	FRobotCard Card2;
+	Card2.Action = ECardAction::RotateRight;
+	Card2.Priority = 200;
+	ProgrammedCards.Add(Card2);
+
+	FRobotCard Card3;
+	Card3.Action = ECardAction::Move2;
+	Card3.Priority = 300;
+	ProgrammedCards.Add(Card3);
+
+	FRobotCard Card4;
+	Card4.Action = ECardAction::RotateLeft;
+	Card4.Priority = 400;
+	ProgrammedCards.Add(Card4);
+
+	FRobotCard Card5;
+	Card5.Action = ECardAction::MoveBack;
+	Card5.Priority = 500;
+	ProgrammedCards.Add(Card5);
+
+	UE_LOG(LogTemp, Log, TEXT("Test cards loaded: Move1, RotateRight, Move2, RotateLeft, MoveBack"));
 }

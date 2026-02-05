@@ -2,6 +2,7 @@
 
 #include "RobotPawn.h"
 #include "RobotMovementComponent.h"
+#include "RobotRallyGameMode.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -161,6 +162,14 @@ void ARobotPawn::Tick(float DeltaTime)
 		ExecuteRotateCommand(1);
 	else if (PC->WasInputKeyJustPressed(EKeys::A))
 		ExecuteRotateCommand(-1);
+	else if (PC->WasInputKeyJustPressed(EKeys::E))
+	{
+		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+		if (GM && GM->CurrentState == EGameState::Programming)
+		{
+			GM->StartExecutionPhase();
+		}
+	}
 }
 
 void ARobotPawn::ExecuteMoveCommand(int32 Distance)
