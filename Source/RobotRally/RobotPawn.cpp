@@ -49,34 +49,35 @@ ARobotPawn::ARobotPawn()
 		GetMesh()->SetVisibility(false);
 	}
 
-	// Load mesh assets
+	// Body mesh component
+	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
+	BodyMesh->SetupAttachment(RootComponent);
+	BodyMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -15.0f));
+	BodyMesh->SetRelativeScale3D(FVector(0.55f, 0.55f, 0.25f));
+	BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Direction indicator component
+	DirectionIndicator = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DirectionCone"));
+	DirectionIndicator->SetupAttachment(RootComponent);
+	DirectionIndicator->SetRelativeLocation(FVector(25.0f, 0.0f, -10.0f));
+	DirectionIndicator->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
+	DirectionIndicator->SetRelativeScale3D(FVector(0.2f, 0.2f, 0.35f));
+	DirectionIndicator->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Load default engine meshes as fallbacks
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderFinder(
 		TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeFinder(
 		TEXT("/Engine/BasicShapes/Cone.Cone"));
 
-	// Body mesh - cylinder
-	BodyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BodyMesh"));
-	BodyMesh->SetupAttachment(RootComponent);
 	if (CylinderFinder.Succeeded())
 	{
 		BodyMesh->SetStaticMesh(CylinderFinder.Object);
 	}
-	BodyMesh->SetRelativeLocation(FVector(0.0f, 0.0f, -15.0f));
-	BodyMesh->SetRelativeScale3D(FVector(0.55f, 0.55f, 0.25f));
-	BodyMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-	// Direction indicator - cone pointing forward
-	DirectionIndicator = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DirectionCone"));
-	DirectionIndicator->SetupAttachment(RootComponent);
 	if (ConeFinder.Succeeded())
 	{
 		DirectionIndicator->SetStaticMesh(ConeFinder.Object);
 	}
-	DirectionIndicator->SetRelativeLocation(FVector(25.0f, 0.0f, -10.0f));
-	DirectionIndicator->SetRelativeRotation(FRotator(-90.0f, 0.0f, 0.0f));
-	DirectionIndicator->SetRelativeScale3D(FVector(0.2f, 0.2f, 0.35f));
-	DirectionIndicator->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// Default starting grid position
 	GridX = 0;
@@ -86,6 +87,16 @@ ARobotPawn::ARobotPawn()
 void ARobotPawn::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Apply custom meshes if set, otherwise keep engine defaults
+	if (BodyMeshAsset)
+	{
+		BodyMesh->SetStaticMesh(BodyMeshAsset);
+	}
+	if (DirectionMeshAsset)
+	{
+		DirectionIndicator->SetStaticMesh(DirectionMeshAsset);
+	}
 
 	// Apply colored materials (created at runtime for proper Color parameter support)
 	UMaterialInterface* BaseMat = nullptr;
@@ -111,14 +122,14 @@ void ARobotPawn::BeginPlay()
 
 	if (BaseMat)
 	{
-		// Body: blue
+		// Apply body color from UPROPERTY
 		UMaterialInstanceDynamic* BodyMat = UMaterialInstanceDynamic::Create(BaseMat, this);
-		BodyMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.2f, 0.5f, 0.9f));
+		BodyMat->SetVectorParameterValue(TEXT("Color"), BodyColor);
 		BodyMesh->SetMaterial(0, BodyMat);
 
-		// Direction indicator: yellow
+		// Apply direction indicator color from UPROPERTY
 		UMaterialInstanceDynamic* ConeMat = UMaterialInstanceDynamic::Create(BaseMat, this);
-		ConeMat->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.9f, 0.8f, 0.1f));
+		ConeMat->SetVectorParameterValue(TEXT("Color"), DirectionColor);
 		DirectionIndicator->SetMaterial(0, ConeMat);
 	}
 

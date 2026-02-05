@@ -56,6 +56,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Grid")
 	float TileSize = 100.0f;
 
+	// Customizable tile mesh (falls back to engine cube if not set)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Grid|Meshes")
+	UStaticMesh* TileMeshAsset;
+
+	// Optional per-tile-type meshes (if set, overrides TileMeshAsset for that type)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Grid|Meshes")
+	TMap<ETileType, UStaticMesh*> TileTypeMeshes;
+
 	UPROPERTY(VisibleAnywhere, Category = "Grid")
 	TMap<FIntVector, FTileData> GridMap;
 

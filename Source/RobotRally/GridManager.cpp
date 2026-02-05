@@ -177,16 +177,32 @@ void AGridManager::RefreshAllTileVisuals()
 
 void AGridManager::SpawnTileMesh(FIntVector Coords, const FTileData& Data)
 {
-	if (!CachedCubeMesh)
+	// Determine which mesh to use: per-type > general custom > engine fallback
+	UStaticMesh* MeshToUse = nullptr;
+
+	if (UStaticMesh** TypeMesh = TileTypeMeshes.Find(Data.TileType))
 	{
-		UE_LOG(LogTemp, Error, TEXT("GridManager: CachedCubeMesh is null, cannot spawn tile"));
+		MeshToUse = *TypeMesh;
+	}
+	else if (TileMeshAsset)
+	{
+		MeshToUse = TileMeshAsset;
+	}
+	else
+	{
+		MeshToUse = CachedCubeMesh;
+	}
+
+	if (!MeshToUse)
+	{
+		UE_LOG(LogTemp, Error, TEXT("GridManager: No mesh available for tile, cannot spawn"));
 		return;
 	}
 
 	FString CompName = FString::Printf(TEXT("Tile_%d_%d"), Coords.X, Coords.Y);
 	UStaticMeshComponent* TileMesh = NewObject<UStaticMeshComponent>(this, FName(*CompName));
 	TileMesh->SetupAttachment(RootComponent);
-	TileMesh->SetStaticMesh(CachedCubeMesh);
+	TileMesh->SetStaticMesh(MeshToUse);
 
 	// Position relative to grid origin
 	FVector TilePos(Coords.X * TileSize, Coords.Y * TileSize, 0.0f);

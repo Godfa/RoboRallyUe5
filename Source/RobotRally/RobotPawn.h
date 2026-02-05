@@ -34,6 +34,21 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Visual")
 	UStaticMeshComponent* DirectionIndicator;
 
+	// Customizable meshes (set in Blueprint or editor, falls back to engine shapes)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Robot|Visual|Meshes")
+	UStaticMesh* BodyMeshAsset;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Robot|Visual|Meshes")
+	UStaticMesh* DirectionMeshAsset;
+
+	// Robot body color
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Robot|Visual|Meshes")
+	FLinearColor BodyColor = FLinearColor(0.2f, 0.5f, 0.9f);
+
+	// Direction indicator color
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Robot|Visual|Meshes")
+	FLinearColor DirectionColor = FLinearColor(0.9f, 0.8f, 0.1f);
+
 	// Grid coordinates
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Grid")
 	int32 GridX;
