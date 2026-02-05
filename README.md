@@ -1,126 +1,126 @@
 # RobotRally (UE5)
 
-Digitaalinen toteutus Robot Rally -lautapelistä Unreal Engine 5.7:lla. Pelaajat ohjelmoivat robotteja liikekorteilla ja katsovat niiden suorittavan käskyt ruudukkopohjaisella pelilaudalla.
+A digital implementation of the Robot Rally board game using Unreal Engine 5.7. Players program robots with movement cards and watch them execute commands on a grid-based game board.
 
-## Vaatimukset
+## Requirements
 
 - Unreal Engine 5.7
-- Visual Studio 2022 (MSVC 14.38 tai 14.44)
+- Visual Studio 2022 (MSVC 14.38 or 14.44)
 - Windows 10/11 SDK (22621)
 
-## Projektin avaaminen
+## Opening the Project
 
-1. Kloonaa repo kansioon `H:\Repos\RoboRallyUe5` (tai haluamaasi sijaintiin)
-2. Tuplaklikkaa `RobotRally.uproject` avataksesi projektin UE5-editorissa
-3. Editori kääntää C++-moduulin automaattisesti
+1. Clone the repo to `H:\Repos\RoboRallyUe5` (or your preferred location)
+2. Double-click `RobotRally.uproject` to open the project in UE5 Editor
+3. The editor will compile the C++ module automatically
 
-## Projektirakenne
+## Project Structure
 
 ```
 Source/RobotRally/
-  RobotRally.h/.cpp              Moduulin rekisteröinti
-  RobotPawn.h/.cpp               Robottihahmo (ACharacter)
-  RobotMovementComponent.h/.cpp  Ruudukkoliike (interpoloitu)
-  GridManager.h/.cpp             Pelilauta (10x10 TMap-ruudukko)
-  RobotRallyGameMode.h/.cpp      Pelitilakone (FSM)
+  RobotRally.h/.cpp              Module registration
+  RobotPawn.h/.cpp               Robot character (ACharacter)
+  RobotMovementComponent.h/.cpp  Grid movement (interpolated)
+  GridManager.h/.cpp             Game board (10x10 TMap grid)
+  RobotRallyGameMode.h/.cpp      Game state machine (FSM)
 ```
 
-## Pelimekaniikka
+## Game Mechanics
 
-### Pelitilat
-1. **Programming** — Pelaaja valitsee 5 liikekorttia rekistereihin
-2. **Executing** — Robotit suorittavat käskyt rekisteri kerrallaan
-3. **GameOver** — Peli päättyy
+### Game States
+1. **Programming** — Player selects 5 movement cards into registers
+2. **Executing** — Robots execute commands register by register
+3. **GameOver** — Game ends
 
-### Korttityypit
-| Kortti | Toiminto |
+### Card Types
+| Card | Action |
 |---|---|
-| Move1 / Move2 / Move3 | Liiku 1-3 ruutua eteenpäin |
-| MoveBack | Liiku 1 ruutu taaksepäin |
-| RotateRight | Käänny 90° oikealle |
-| RotateLeft | Käänny 90° vasemmalle |
-| UTurn | Käänny 180° |
+| Move1 / Move2 / Move3 | Move 1-3 tiles forward |
+| MoveBack | Move 1 tile backward |
+| RotateRight | Turn 90° right |
+| RotateLeft | Turn 90° left |
+| UTurn | Turn 180° |
 
-### Ruututyypit
-| Tyyppi | Vaikutus |
+### Tile Types
+| Type | Effect |
 |---|---|
-| Normal | Ei vaikutusta |
-| Pit | Robotti tuhoutuu |
-| Conveyor (N/S/E/W) | Siirtää robottia vuoron lopussa |
-| Laser | Vahingoittaa robottia |
-| Checkpoint | Kerättävä järjestyksessä voittaakseen |
+| Normal | No effect |
+| Pit | Robot is destroyed |
+| Conveyor (N/S/E/W) | Moves robot at end of turn |
+| Laser | Damages robot |
+| Checkpoint | Must be collected in order to win |
 
-## Arkkitehtuuri
+## Architecture
 
 ```
-ARobotRallyGameMode          Pelitilakone, vuorologiikka
+ARobotRallyGameMode          Game state machine, turn logic
   |
-  +-- ARobotPawn             Robottihahmo ruudukolla
-  |     +-- URobotMovementComponent  Interpoloitu ruudukkoliike
+  +-- ARobotPawn             Robot character on grid
+  |     +-- URobotMovementComponent  Interpolated grid movement
   |
-  +-- AGridManager           Pelilauta, tile-data, koordinaattimuunnokset
+  +-- AGridManager           Game board, tile data, coordinate conversions
 ```
 
-### Ruudukkojärjestelmä
-- `TMap<FIntVector, FTileData>` — avain (x, y, 0), arvo sisältää tyypin ja checkpoint-numeron
-- `GridToWorld()` / `WorldToGrid()` — muunnokset ruudukko- ja maailmakoordinaattien välillä
-- Ruudun koko: 100 UE-yksikköä
-- Laudan ulkopuoli = kuoppa (Pit)
+### Grid System
+- `TMap<FIntVector, FTileData>` — key (x, y, 0), value contains type and checkpoint number
+- `GridToWorld()` / `WorldToGrid()` — conversions between grid and world coordinates
+- Tile size: 100 UE units
+- Outside board = pit
 
-### Liikejärjestelmä
-- `MoveInGrid(Distance)` — asettaa kohdepisteen forward-vektorin suuntaan
-- `RotateInGrid(Steps)` — kääntää kohderotaatiota 90° askelin
-- Tick-funktiossa interpoloidaan pehmeästi kohteeseen (`VInterpTo` / `RInterpTo`)
+### Movement System
+- `MoveInGrid(Distance)` — sets target point in forward vector direction
+- `RotateInGrid(Steps)` — rotates target rotation in 90° steps
+- Tick function smoothly interpolates to target (`VInterpTo` / `RInterpTo`)
 
-## Toteutussuunnitelma
+## Implementation Plan
 
-### Vaihe 0: Projektin luonti & rakenne — VALMIS
-- [x] UE5-projekti luotu nimellä RobotRally
-- [x] Kansiorakenne standardin mukaisesti
-- [x] Plugin-asetukset (Enhanced Input)
+### Phase 0: Project Creation & Structure — COMPLETE
+- [x] UE5 project created named RobotRally
+- [x] Folder structure per standards
+- [x] Plugin settings (Enhanced Input)
 
-### Vaihe 1: Perusrakenne (C++) — KESKEN
-- [x] `ARobotPawn` — Header ja CPP, perusrakenne
-- [x] `URobotMovementComponent` — `MoveInGrid()` ja `RotateInGrid()` interpoloinnilla
-- [x] `AGridManager` — Ruudukon generointi ja tile-tarkistukset
-- [ ] GridX/GridY-synkronointi liikkeen yhteydessä
-- [ ] MovementComponent-GridManager-yhteys (ruudukkovalidointi: kuopat, rajat, esteet)
-- [ ] Visuaalinen debug-piirto ruudukolle
+### Phase 1: Core Structure (C++) — IN PROGRESS
+- [x] `ARobotPawn` — Header and CPP, basic structure
+- [x] `URobotMovementComponent` — `MoveInGrid()` and `RotateInGrid()` with interpolation
+- [x] `AGridManager` — Grid generation and tile checks
+- [x] `ProcessNextRegister()` — Card execution connected to robot movement
+- [ ] MovementComponent-GridManager connection (grid validation: pits, bounds, obstacles)
+- [ ] Visual debug drawing for grid
 
-### Vaihe 2: Logiikkakerros (GameMode & kortit)
-- [x] `ARobotRallyGameMode` — Tilakone (Programming/Executing/GameOver), 5 rekisteriä
-- [x] `FRobotCard` — Kortin tyyppi (ECardAction) ja prioriteetti
-- [ ] `ProcessNextRegister()` — Korttien kytkentä robottien liikkeisiin
-- [ ] `UCardDataAsset` — Data-driven lähestymistapa korteille
-- [ ] Korttien jakelu- ja käsijärjestelmä (satunnaiset kortit pelaajalle)
-- [ ] Prioriteettipohjainen suoritusjärjestys robottien välillä
+### Phase 2: Logic Layer (GameMode & Cards)
+- [x] `ARobotRallyGameMode` — State machine (Programming/Executing/GameOver), 5 registers
+- [x] `FRobotCard` — Card type (ECardAction) and priority
+- [x] Card execution system with test sequence
+- [ ] `UCardDataAsset` — Data-driven approach for cards
+- [ ] Card dealing and hand system (random cards to player)
+- [ ] Priority-based execution order between robots
 
-### Vaihe 3: Pelaajan ohjaus
-- [ ] `ARobotController` (APlayerController) — Hiiren klikkaukset ja korttisyötteet
-- [ ] `HealthComponent` — Vahinko, elämät, robotin tuhoaminen ja respawn
-- [ ] Checkpoint-keräysjärjestelmä (järjestyksessä kerättävät liput)
+### Phase 3: Player Control
+- [ ] `ARobotController` (APlayerController) — Mouse clicks and card inputs
+- [ ] `HealthComponent` — Damage, lives, robot destruction and respawn
+- [ ] Checkpoint collection system (flags collected in order)
 
-### Vaihe 4: Kenttävaarat & ympäristö
-- [ ] Liukuhihnat — Siirtävät robottia vuoron lopussa suunnan mukaan
-- [ ] Laserit (`BP_Hazard_Laser`) — Vahingoittavat robottia rekisterin lopussa
-- [ ] Kuopat — Robotti tuhoutuu päätyessään kuoppaan
-- [ ] Törmäystarkistukset robottien välillä (työntö)
+### Phase 4: Field Hazards & Environment
+- [ ] Conveyor belts — Move robot at end of turn based on direction
+- [ ] Lasers (`BP_Hazard_Laser`) — Damage robot at end of register
+- [ ] Pits — Robot is destroyed when entering pit
+- [ ] Collision checks between robots (pushing)
 
-### Vaihe 5: UI & käyttöliittymä
-- [ ] `WBP_ProgrammingDeck` — Korttien valintanäkymä (9 korttia kädessä, 5 rekisteriin)
-- [ ] `WBP_CardSlot` — Yksittäisen kortin UI-esitys
-- [ ] `WBP_HUD` — Terveys, elämät, nykyinen pelivaihe, checkpoint-edistyminen
+### Phase 5: UI & Interface
+- [ ] `WBP_ProgrammingDeck` — Card selection view (9 cards in hand, 5 to registers)
+- [ ] `WBP_CardSlot` — Single card UI representation
+- [ ] `WBP_HUD` — Health, lives, current game phase, checkpoint progress
 
-### Vaihe 6: Sisältö & viimeistely
-- [ ] `/Content/RobotRally/Maps/` — Pelitaso(t)
-- [ ] `/Content/RobotRally/Blueprints/` — C++-pohjaiset Blueprint-lapsiluokat
-- [ ] `/Content/RobotRally/Data/` — DataTablet ja DataAssetit ruudukoille
-- [ ] Ääniefektit ja visuaaliset efektit (liike, vahinko, checkpoint)
+### Phase 6: Content & Polish
+- [ ] `/Content/RobotRally/Maps/` — Game level(s)
+- [ ] `/Content/RobotRally/Blueprints/` — Blueprint child classes from C++
+- [ ] `/Content/RobotRally/Data/` — DataTables and DataAssets for grids
+- [ ] Sound effects and visual effects (movement, damage, checkpoint)
 
-### Varmistussuunnitelma
-- [ ] Automaattiset testit: GridManager-koordinaattimuunnokset, törmäystarkistukset
-- [ ] Manuaalinen testaus: korttien valinta, robottien liike, vaarat, checkpoint-keräys
+### Verification Plan
+- [ ] Automated tests: GridManager coordinate conversions, collision checks
+- [ ] Manual testing: card selection, robot movement, hazards, checkpoint collection
 
-## Lisenssi
+## License
 
 Copyright (c) 2026 Robot Rally Team. All Rights Reserved.
