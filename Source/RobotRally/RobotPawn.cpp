@@ -207,6 +207,27 @@ void ARobotPawn::Tick(float DeltaTime)
 	{
 		GM->StartManualMoveTick();
 	}
+
+	// Card selection input (works even while moving)
+	if (GM && GM->CurrentState == EGameState::Programming)
+	{
+		static const FKey NumberKeys[] = {
+			EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five,
+			EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine
+		};
+		for (int32 i = 0; i < 9; ++i)
+		{
+			if (PC->WasInputKeyJustPressed(NumberKeys[i]))
+			{
+				GM->SelectCardFromHand(i);
+				break;
+			}
+		}
+		if (PC->WasInputKeyJustPressed(EKeys::BackSpace))
+		{
+			GM->UndoLastSelection();
+		}
+	}
 }
 
 void ARobotPawn::ApplyDamage(int32 Amount)

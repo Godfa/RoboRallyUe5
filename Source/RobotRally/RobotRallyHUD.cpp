@@ -115,7 +115,7 @@ void ARobotRallyHUD::DrawHUD()
 		{
 			switch (GM->CurrentState)
 			{
-			case EGameState::Programming: StateText = TEXT("PROGRAMMING (WASD = move, E = execute)"); break;
+			case EGameState::Programming: StateText = TEXT("PROGRAMMING (1-9 = cards, Bksp = undo, E = go)"); break;
 			case EGameState::Executing:   StateText = TEXT("EXECUTING..."); break;
 			case EGameState::GameOver:    StateText = Robot->bIsAlive ? TEXT("VICTORY!") : TEXT("GAME OVER"); break;
 			}
@@ -132,6 +132,137 @@ void ARobotRallyHUD::DrawHUD()
 		PosItem.EnableShadow(FLinearColor::Black);
 		Canvas->DrawItem(PosItem);
 	}
+
+	DrawCardSelection();
+}
+
+void ARobotRallyHUD::DrawCardSelection()
+{
+	ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+	if (!GM || GM->CurrentState != EGameState::Programming) return;
+	if (GM->HandCards.Num() == 0) return;
+
+	UFont* Font = GEngine->GetLargeFont();
+	const float Padding = 10.0f;
+	const float SlotHeight = 28.0f;
+	const float PanelWidth = 280.0f;
+	const float PanelX = Canvas->SizeX - PanelWidth - Padding;
+	float CurY = Padding;
+
+	// --- Panel background ---
+	float TotalHeight = SlotHeight * (ARobotRallyGameMode::NUM_REGISTERS + GM->HandCards.Num() + 4);
+	FCanvasTileItem PanelBG(
+		FVector2D(PanelX, CurY),
+		FVector2D(PanelWidth, TotalHeight),
+		FLinearColor(0.0f, 0.0f, 0.0f, 0.7f));
+	PanelBG.BlendMode = SE_BLEND_Translucent;
+	Canvas->DrawItem(PanelBG);
+
+	float TextX = PanelX + Padding;
+
+	// --- Registers header ---
+	FCanvasTextItem Header(FVector2D(TextX, CurY),
+		FText::FromString(TEXT("REGISTERS")), Font, FLinearColor(1.0f, 1.0f, 0.0f));
+	Header.EnableShadow(FLinearColor::Black);
+	Canvas->DrawItem(Header);
+	CurY += SlotHeight;
+
+	// Count filled registers to determine "next" slot
+	int32 FilledCount = 0;
+	for (int32 i = 0; i < ARobotRallyGameMode::NUM_REGISTERS; ++i)
+	{
+		if (GM->RegisterSlots.IsValidIndex(i) && GM->RegisterSlots[i] != -1)
+			FilledCount++;
+	}
+
+	// --- Register slots R1-R5 ---
+	for (int32 i = 0; i < ARobotRallyGameMode::NUM_REGISTERS; ++i)
+	{
+		FString SlotText;
+		FLinearColor SlotColor;
+
+		bool bFilled = GM->RegisterSlots.IsValidIndex(i) && GM->RegisterSlots[i] != -1;
+		if (bFilled)
+		{
+			int32 HandIdx = GM->RegisterSlots[i];
+			if (GM->HandCards.IsValidIndex(HandIdx))
+			{
+				FString CardName = ARobotRallyGameMode::GetCardActionName(GM->HandCards[HandIdx].Action);
+				SlotText = FString::Printf(TEXT("R%d: %s (P%d)"), i + 1, *CardName, GM->HandCards[HandIdx].Priority);
+			}
+			else
+			{
+				SlotText = FString::Printf(TEXT("R%d: ???"), i + 1);
+			}
+			SlotColor = FLinearColor(0.2f, 0.9f, 0.2f); // Green
+		}
+		else if (i == FilledCount)
+		{
+			SlotText = FString::Printf(TEXT("R%d: [next]"), i + 1);
+			SlotColor = FLinearColor(1.0f, 1.0f, 0.3f); // Yellow
+		}
+		else
+		{
+			SlotText = FString::Printf(TEXT("R%d: ---"), i + 1);
+			SlotColor = FLinearColor(0.5f, 0.5f, 0.5f); // Gray
+		}
+
+		FCanvasTextItem SlotItem(FVector2D(TextX, CurY),
+			FText::FromString(SlotText), Font, SlotColor);
+		SlotItem.EnableShadow(FLinearColor::Black);
+		Canvas->DrawItem(SlotItem);
+		CurY += SlotHeight;
+	}
+
+	// --- Hand header ---
+	CurY += SlotHeight * 0.5f;
+	FCanvasTextItem HandHeader(FVector2D(TextX, CurY),
+		FText::FromString(TEXT("HAND")), Font, FLinearColor(1.0f, 1.0f, 0.0f));
+	HandHeader.EnableShadow(FLinearColor::Black);
+	Canvas->DrawItem(HandHeader);
+	CurY += SlotHeight;
+
+	// --- Hand cards ---
+	for (int32 i = 0; i < GM->HandCards.Num(); ++i)
+	{
+		FString CardName = ARobotRallyGameMode::GetCardActionName(GM->HandCards[i].Action);
+		bool bAssigned = GM->IsCardInRegister(i);
+
+		FString CardText;
+		FLinearColor CardColor;
+		if (bAssigned)
+		{
+			CardText = FString::Printf(TEXT("%d: %s (P%d) [R]"), i + 1, *CardName, GM->HandCards[i].Priority);
+			CardColor = FLinearColor(0.4f, 0.4f, 0.4f); // Gray = already assigned
+		}
+		else
+		{
+			CardText = FString::Printf(TEXT("%d: %s (P%d)"), i + 1, *CardName, GM->HandCards[i].Priority);
+			CardColor = FLinearColor::White;
+		}
+
+		FCanvasTextItem CardItem(FVector2D(TextX, CurY),
+			FText::FromString(CardText), Font, CardColor);
+		CardItem.EnableShadow(FLinearColor::Black);
+		Canvas->DrawItem(CardItem);
+		CurY += SlotHeight;
+	}
+
+	// --- Instructions ---
+	CurY += SlotHeight * 0.5f;
+	FString InstructionText;
+	if (GM->AreAllRegistersFilled())
+	{
+		InstructionText = TEXT("Press E to execute!");
+	}
+	else
+	{
+		InstructionText = TEXT("1-9 = select, Bksp = undo");
+	}
+	FCanvasTextItem InstrItem(FVector2D(TextX, CurY),
+		FText::FromString(InstructionText), Font, FLinearColor(0.0f, 1.0f, 1.0f));
+	InstrItem.EnableShadow(FLinearColor::Black);
+	Canvas->DrawItem(InstrItem);
 }
 
 void ARobotRallyHUD::AddEventMessage(const FString& Text, FColor Color)

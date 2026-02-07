@@ -73,6 +73,38 @@ public:
 	TArray<FRobotCard> ProgrammedCards;
 
 	static constexpr int32 NUM_REGISTERS = 5;
+	static constexpr int32 DECK_SIZE = 84;
+	static constexpr int32 BASE_HAND_SIZE = 9;
+	static constexpr int32 MIN_HAND_SIZE = 5;
+
+	// Deck and hand system
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
+	TArray<FRobotCard> Deck;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
+	TArray<FRobotCard> DiscardPile;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
+	TArray<FRobotCard> HandCards;
+
+	// Indices into HandCards for each register slot (-1 = empty)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
+	TArray<int32> RegisterSlots;
+
+	// Card selection functions
+	UFUNCTION(BlueprintCallable, Category = "Game|Cards")
+	void SelectCardFromHand(int32 HandIndex);
+
+	UFUNCTION(BlueprintCallable, Category = "Game|Cards")
+	void UndoLastSelection();
+
+	UFUNCTION(BlueprintCallable, Category = "Game|Cards")
+	bool AreAllRegistersFilled() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Game|Cards")
+	bool IsCardInRegister(int32 HandIndex) const;
+
+	static FString GetCardActionName(ECardAction Action);
 
 	// Tile hazard processing (public so RobotPawn can trigger after manual moves)
 	UFUNCTION(BlueprintCallable, Category = "Game")
@@ -92,7 +124,13 @@ private:
 	void SetupTestScene();
 	void ExecuteCardAction(ECardAction Action);
 	void CheckMovementComplete();
-	void SetupTestCards();
+
+	void BuildDeck();
+	void ShuffleDeck();
+	void DealHand();
+	void CommitRegistersToProgram();
+	void DiscardHand();
+	int32 CalculateHandSize() const;
 
 	void ProcessConveyors();
 	void CheckWinLoseConditions();

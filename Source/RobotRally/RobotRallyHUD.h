@@ -27,6 +27,8 @@ public:
 	void AddEventMessage(const FString& Text, FColor Color = FColor::White);
 
 private:
+	void DrawCardSelection();
+
 	TArray<FEventMessage> Messages;
 
 	static constexpr float MESSAGE_DURATION = 5.0f;

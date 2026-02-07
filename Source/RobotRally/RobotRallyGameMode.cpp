@@ -38,8 +38,9 @@ void ARobotRallyGameMode::ShowEventMessage(const FString& Text, FColor Color)
 void ARobotRallyGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+	BuildDeck();
+	ShuffleDeck();
 	SetupTestScene();
-	StartProgrammingPhase();
 }
 
 void ARobotRallyGameMode::SetupTestScene()
@@ -193,7 +194,8 @@ void ARobotRallyGameMode::SetupTestScene()
 			}
 		}
 
-		ShowEventMessage(TEXT("Robot ready at (5,5). WASD = move, E = execute cards"), FColor::Cyan);
+		ShowEventMessage(TEXT("Robot ready at (5,5). WASD = move, 1-9 = select cards, E = execute"), FColor::Cyan);
+		StartProgrammingPhase();
 	});
 }
 
@@ -202,14 +204,21 @@ void ARobotRallyGameMode::StartProgrammingPhase()
 	CurrentState = EGameState::Programming;
 	CurrentRegister = 0;
 	GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
-	ShowEventMessage(TEXT("Programming phase. Press E to execute cards."), FColor::Cyan);
+	DiscardHand();
+	DealHand();
+	ShowEventMessage(TEXT("Programming phase. Select 5 cards (1-9), then press E."), FColor::Cyan);
 }
 
 void ARobotRallyGameMode::StartExecutionPhase()
 {
+	if (!AreAllRegistersFilled())
+	{
+		ShowEventMessage(TEXT("Fill all 5 registers before executing!"), FColor::Red);
+		return;
+	}
 	CurrentState = EGameState::Executing;
 	CurrentRegister = 0;
-	SetupTestCards();
+	CommitRegistersToProgram();
 	ShowEventMessage(TEXT("Executing cards..."), FColor::Cyan);
 	ProcessNextRegister();
 }
@@ -244,14 +253,8 @@ void ARobotRallyGameMode::ProcessNextRegister()
 
 	FRobotCard Card = ProgrammedCards[CurrentRegister];
 
-	// Show card name on HUD
-	static const TCHAR* CardNames[] = {
-		TEXT("Move 1"), TEXT("Move 2"), TEXT("Move 3"), TEXT("Move Back"),
-		TEXT("Rotate Right"), TEXT("Rotate Left"), TEXT("U-Turn")
-	};
-	int32 ActionIdx = static_cast<int32>(Card.Action);
-	FString CardName = (ActionIdx >= 0 && ActionIdx < 7) ? CardNames[ActionIdx] : TEXT("???");
-	ShowEventMessage(FString::Printf(TEXT("Register %d: %s"), CurrentRegister + 1, *CardName), FColor::White);
+	FString CardName = GetCardActionName(Card.Action);
+	ShowEventMessage(FString::Printf(TEXT("Register %d: %s (P%d)"), CurrentRegister + 1, *CardName, Card.Priority), FColor::White);
 
 	ExecuteCardAction(Card.Action);
 	CurrentRegister++;
@@ -524,40 +527,168 @@ void ARobotRallyGameMode::CheckManualMoveComplete()
 	}
 }
 
-void ARobotRallyGameMode::SetupTestCards()
+FString ARobotRallyGameMode::GetCardActionName(ECardAction Action)
+{
+	switch (Action)
+	{
+	case ECardAction::Move1:        return TEXT("Move 1");
+	case ECardAction::Move2:        return TEXT("Move 2");
+	case ECardAction::Move3:        return TEXT("Move 3");
+	case ECardAction::MoveBack:     return TEXT("Back Up");
+	case ECardAction::RotateRight:  return TEXT("Turn Right");
+	case ECardAction::RotateLeft:   return TEXT("Turn Left");
+	case ECardAction::UTurn:        return TEXT("U-Turn");
+	default:                        return TEXT("???");
+	}
+}
+
+void ARobotRallyGameMode::BuildDeck()
+{
+	Deck.Empty();
+	Deck.Reserve(DECK_SIZE);
+
+	auto AddCards = [this](ECardAction Action, int32 Count, int32 StartPriority, int32 Step)
+	{
+		for (int32 i = 0; i < Count; ++i)
+		{
+			FRobotCard Card;
+			Card.Action = Action;
+			Card.Priority = StartPriority + i * Step;
+			Deck.Add(Card);
+		}
+	};
+
+	// Robot Rally classic deck distribution (84 cards)
+	AddCards(ECardAction::UTurn,       6,  10,  10);  // 10-60
+	AddCards(ECardAction::RotateLeft, 18,  70,  20);  // 70, 90, 110, ... 410
+	AddCards(ECardAction::RotateRight,18,  80,  20);  // 80, 100, 120, ... 420
+	AddCards(ECardAction::MoveBack,    6, 430,  10);  // 430-480
+	AddCards(ECardAction::Move1,      18, 490,  10);  // 490-660
+	AddCards(ECardAction::Move2,      12, 670,  10);  // 670-780
+	AddCards(ECardAction::Move3,       6, 790,  10);  // 790-840
+
+	UE_LOG(LogTemp, Log, TEXT("Deck built: %d cards"), Deck.Num());
+}
+
+void ARobotRallyGameMode::ShuffleDeck()
+{
+	// Fisher-Yates shuffle
+	for (int32 i = Deck.Num() - 1; i > 0; --i)
+	{
+		int32 j = FMath::RandRange(0, i);
+		Deck.Swap(i, j);
+	}
+}
+
+int32 ARobotRallyGameMode::CalculateHandSize() const
+{
+	if (!TestRobot) return BASE_HAND_SIZE;
+	int32 DamageTaken = TestRobot->MaxHealth - TestRobot->Health;
+	return FMath::Clamp(BASE_HAND_SIZE - DamageTaken, MIN_HAND_SIZE, BASE_HAND_SIZE);
+}
+
+void ARobotRallyGameMode::DealHand()
+{
+	int32 HandSize = CalculateHandSize();
+	HandCards.Empty();
+	HandCards.Reserve(HandSize);
+
+	for (int32 i = 0; i < HandSize; ++i)
+	{
+		// Reshuffle discard pile if deck is empty
+		if (Deck.Num() == 0)
+		{
+			if (DiscardPile.Num() == 0)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("No cards left in deck or discard pile!"));
+				break;
+			}
+			Deck = MoveTemp(DiscardPile);
+			DiscardPile.Empty();
+			ShuffleDeck();
+			UE_LOG(LogTemp, Log, TEXT("Reshuffled discard pile into deck (%d cards)"), Deck.Num());
+		}
+
+		HandCards.Add(Deck.Pop());
+	}
+
+	// Initialize register slots to empty
+	RegisterSlots.Init(-1, NUM_REGISTERS);
+
+	UE_LOG(LogTemp, Log, TEXT("Dealt %d cards (hand size: %d)"), HandCards.Num(), HandSize);
+}
+
+void ARobotRallyGameMode::SelectCardFromHand(int32 HandIndex)
+{
+	if (CurrentState != EGameState::Programming) return;
+	if (!HandCards.IsValidIndex(HandIndex)) return;
+	if (IsCardInRegister(HandIndex)) return;
+
+	// Find first empty register slot
+	for (int32 i = 0; i < NUM_REGISTERS; ++i)
+	{
+		if (RegisterSlots[i] == -1)
+		{
+			RegisterSlots[i] = HandIndex;
+			FString CardName = GetCardActionName(HandCards[HandIndex].Action);
+			ShowEventMessage(FString::Printf(TEXT("R%d: %s (P%d)"),
+				i + 1, *CardName, HandCards[HandIndex].Priority), FColor::Green);
+			return;
+		}
+	}
+
+	ShowEventMessage(TEXT("All registers full! Press E to execute."), FColor::Yellow);
+}
+
+void ARobotRallyGameMode::UndoLastSelection()
+{
+	if (CurrentState != EGameState::Programming) return;
+
+	// Find the last filled register and clear it
+	for (int32 i = NUM_REGISTERS - 1; i >= 0; --i)
+	{
+		if (RegisterSlots[i] != -1)
+		{
+			ShowEventMessage(FString::Printf(TEXT("Cleared R%d"), i + 1), FColor::Yellow);
+			RegisterSlots[i] = -1;
+			return;
+		}
+	}
+}
+
+bool ARobotRallyGameMode::AreAllRegistersFilled() const
+{
+	if (RegisterSlots.Num() != NUM_REGISTERS) return false;
+	for (int32 Slot : RegisterSlots)
+	{
+		if (Slot == -1) return false;
+	}
+	return true;
+}
+
+bool ARobotRallyGameMode::IsCardInRegister(int32 HandIndex) const
+{
+	return RegisterSlots.Contains(HandIndex);
+}
+
+void ARobotRallyGameMode::CommitRegistersToProgram()
 {
 	ProgrammedCards.Empty();
+	ProgrammedCards.Reserve(NUM_REGISTERS);
 
-	// Demo route from (5,5) facing North:
-	// 1. Move1 -> (6,5) LASER! takes 1 damage
-	// 2. Move1 -> (7,5) safe
-	// 3. RotateRight -> face East
-	// 4. Move2 -> (7,7) PIT! robot dies
-	// 5. (won't execute - robot is dead)
-	FRobotCard Card1;
-	Card1.Action = ECardAction::Move1;
-	Card1.Priority = 100;
-	ProgrammedCards.Add(Card1);
+	for (int32 i = 0; i < NUM_REGISTERS; ++i)
+	{
+		int32 HandIdx = RegisterSlots[i];
+		if (HandCards.IsValidIndex(HandIdx))
+		{
+			ProgrammedCards.Add(HandCards[HandIdx]);
+		}
+	}
+}
 
-	FRobotCard Card2;
-	Card2.Action = ECardAction::Move1;
-	Card2.Priority = 200;
-	ProgrammedCards.Add(Card2);
-
-	FRobotCard Card3;
-	Card3.Action = ECardAction::RotateRight;
-	Card3.Priority = 300;
-	ProgrammedCards.Add(Card3);
-
-	FRobotCard Card4;
-	Card4.Action = ECardAction::Move2;
-	Card4.Priority = 400;
-	ProgrammedCards.Add(Card4);
-
-	FRobotCard Card5;
-	Card5.Action = ECardAction::Move1;
-	Card5.Priority = 500;
-	ProgrammedCards.Add(Card5);
-
-	UE_LOG(LogTemp, Log, TEXT("Test cards loaded: Move1, Move1, RotateRight, Move2, Move1 (hits laser + pit)"));
+void ARobotRallyGameMode::DiscardHand()
+{
+	DiscardPile.Append(HandCards);
+	HandCards.Empty();
+	RegisterSlots.Empty();
 }
