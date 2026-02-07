@@ -121,12 +121,32 @@ bool AGridManager::IsInBounds(int32 X, int32 Y) const
 
 bool AGridManager::IsValidTile(FIntVector Coords) const
 {
-	if (!IsInBounds(Coords.X, Coords.Y))
+	// Robots can enter any tile within bounds (pits kill via ProcessTileEffects)
+	return IsInBounds(Coords.X, Coords.Y);
+}
+
+FTileData AGridManager::GetTileData(FIntVector Coords) const
+{
+	if (const FTileData* Data = GridMap.Find(Coords))
 	{
-		return false;
+		return *Data;
 	}
-	ETileType Type = GetTileType(Coords);
-	return Type != ETileType::Pit;
+	FTileData PitData;
+	PitData.TileType = ETileType::Pit;
+	return PitData;
+}
+
+int32 AGridManager::GetTotalCheckpoints() const
+{
+	int32 Count = 0;
+	for (const auto& Pair : GridMap)
+	{
+		if (Pair.Value.TileType == ETileType::Checkpoint)
+		{
+			Count++;
+		}
+	}
+	return Count;
 }
 
 void AGridManager::SetTileType(FIntVector Coords, const FTileData& Data)

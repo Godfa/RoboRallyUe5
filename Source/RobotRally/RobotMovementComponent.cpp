@@ -153,6 +153,20 @@ void URobotMovementComponent::MoveInGrid(int32 Distance)
 	OnGridPositionChanged.Broadcast(CurrentGridX, CurrentGridY);
 }
 
+void URobotMovementComponent::MoveToWorldPosition(FVector NewTarget)
+{
+	TargetLocation = NewTarget;
+	TargetLocation.Z = GetOwner()->GetActorLocation().Z;
+	bIsMoving = true;
+}
+
+void URobotMovementComponent::SetGridPosition(int32 NewX, int32 NewY)
+{
+	CurrentGridX = NewX;
+	CurrentGridY = NewY;
+	OnGridPositionChanged.Broadcast(CurrentGridX, CurrentGridY);
+}
+
 void URobotMovementComponent::RotateInGrid(int32 Steps)
 {
 	if (bIsRotating)

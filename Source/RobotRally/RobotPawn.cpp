@@ -158,12 +158,26 @@ void ARobotPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (!bIsAlive) return;
+
+	bool bCurrentlyMoving = RobotMovement && (RobotMovement->IsMoving() || RobotMovement->IsRotating());
+
+	// Detect when manual movement just completed -> trigger tile effects
+	if (bWasMovingLastFrame && !bCurrentlyMoving)
+	{
+		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+		if (GM && GM->CurrentState == EGameState::Programming)
+		{
+			GM->ProcessTileEffects();
+		}
+	}
+	bWasMovingLastFrame = bCurrentlyMoving;
+
 	// Simple keyboard input for testing
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC) return;
 
-	bool bBusy = RobotMovement && (RobotMovement->IsMoving() || RobotMovement->IsRotating());
-	if (bBusy) return;
+	if (bCurrentlyMoving) return;
 
 	if (PC->WasInputKeyJustPressed(EKeys::W))
 		ExecuteMoveCommand(1);
@@ -180,6 +194,31 @@ void ARobotPawn::Tick(float DeltaTime)
 		{
 			GM->StartExecutionPhase();
 		}
+	}
+}
+
+void ARobotPawn::ApplyDamage(int32 Amount)
+{
+	if (!bIsAlive) return;
+
+	Health = FMath::Max(0, Health - Amount);
+	UE_LOG(LogTemp, Log, TEXT("Robot took %d damage! Health: %d/%d"), Amount, Health, MaxHealth);
+
+	if (Health <= 0)
+	{
+		bIsAlive = false;
+		UE_LOG(LogTemp, Log, TEXT("Robot destroyed!"));
+		OnDeath.Broadcast();
+	}
+}
+
+void ARobotPawn::ReachCheckpoint(int32 Number)
+{
+	if (Number == CurrentCheckpoint + 1)
+	{
+		CurrentCheckpoint = Number;
+		UE_LOG(LogTemp, Log, TEXT("Checkpoint %d reached!"), Number);
+		OnCheckpointReached.Broadcast(Number);
 	}
 }
 

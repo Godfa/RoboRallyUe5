@@ -72,6 +72,13 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "GridMovement")
 	FOnGridPositionChanged OnGridPositionChanged;
 
+	// Move directly to a world position (for conveyor/external movement)
+	UFUNCTION(BlueprintCallable, Category = "GridMovement")
+	void MoveToWorldPosition(FVector NewTarget);
+
+	// Force-set grid position without movement (used after conveyor updates)
+	void SetGridPosition(int32 NewX, int32 NewY);
+
 	// Returns (DX, DY) delta for a given direction
 	static void GetDirectionDelta(EGridDirection Dir, int32& OutDX, int32& OutDY);
 

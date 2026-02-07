@@ -55,10 +55,11 @@ Players program robots with movement cards, then watch them execute on a grid-ba
 ## Architecture
 
 ### C++ Classes (Source/RobotRally/)
-- **ARobotPawn** (ACharacter) — Robot actor with grid coordinates, customizable meshes
+- **ARobotPawn** (ACharacter) — Robot actor with grid coordinates, health, checkpoints, customizable meshes
 - **URobotMovementComponent** (UActorComponent) — Smooth grid-based movement via interpolation
 - **AGridManager** (AActor) — 10x10 TMap<FIntVector, FTileData> grid with tile types
-- **ARobotRallyGameMode** (AGameModeBase) — FSM: Programming -> Executing -> GameOver, 5 registers
+- **ARobotRallyGameMode** (AGameModeBase) — FSM: Programming -> Executing -> GameOver, 5 registers, tile effects
+- **ARobotRallyHUD** (AHUD) — On-screen health bar, checkpoint counter, event log
 
 ### Key Types
 - **ETileType**: Normal, Pit, ConveyorNorth/South/East/West, Laser, Checkpoint
@@ -77,7 +78,16 @@ Players program robots with movement cards, then watch them execute on a grid-ba
 - URobotMovementComponent interpolates toward TargetLocation/TargetRotation each tick
 - MoveInGrid(Distance) moves robot forward/backward in grid units
 - RotateInGrid(Steps) rotates robot (1 step = 90 degrees)
+- MoveToWorldPosition(Target) for conveyor/external movement
 - Press E to execute programmed cards (test sequence)
+
+### Tile Hazard System
+- After each move (card or WASD), ProcessTileEffects() checks current tile
+- Pits: instant death (full damage)
+- Lasers: 1 damage per register
+- Checkpoints: tracked in order, win when all reached
+- Conveyors: move robot 1 tile, chain up to 10 deep
+- Win/Lose: GameOver state on death or all checkpoints collected
 
 ### Asset Customization
 - **RobotPawn**: `BodyMeshAsset`, `DirectionMeshAsset`, `BodyColor`, `DirectionColor`
@@ -98,10 +108,14 @@ Players program robots with movement cards, then watch them execute on a grid-ba
 - **Test in PIE**: Press Play to see the game, WASD to move robot, E to execute cards
 
 ## Current State
-- Card execution system implemented (5 registers with test sequence)
+- Card execution system (5 registers with test sequence)
 - Grid visualization with colored tiles
 - Robot movement with smooth interpolation
 - Customizable meshes via UPROPERTY
+- Tile hazard system: pits, lasers, conveyors, checkpoints
+- Health system with damage and death
+- Win/lose conditions (all checkpoints / robot death)
+- On-screen HUD: health bar, checkpoint counter, game state, event log
 
 ## Language
 - Project documentation and commit messages: Finnish or English

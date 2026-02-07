@@ -87,6 +87,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Grid")
 	bool IsValidTile(FIntVector Coords) const;
 
+	// Get full tile data (type + checkpoint number etc.)
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	FTileData GetTileData(FIntVector Coords) const;
+
+	// Get total number of checkpoints on the board
+	UFUNCTION(BlueprintPure, Category = "Grid")
+	int32 GetTotalCheckpoints() const;
+
 	// Set tile type and update visual
 	UFUNCTION(BlueprintCallable, Category = "Grid")
 	void SetTileType(FIntVector Coords, const FTileData& Data);

@@ -1,7 +1,7 @@
 # Tile Hazard System
 
 **Created**: 2026-02-05
-**Status**: 📋 Planned
+**Status**: ✅ Implemented
 **Complexity**: Medium
 **Last Updated**: 2026-02-05
 
@@ -80,20 +80,20 @@ Implement tile effects so that conveyors move robots, lasers deal damage, pits d
 **Complexity**: Simple
 
 #### Task 1.1: Add health to ARobotPawn
-- [ ] Add `UPROPERTY Health` (int32, default 10)
-- [ ] Add `UPROPERTY MaxHealth` (int32, default 10)
-- [ ] Add `TakeDamage(int32 Amount)` function
-- [ ] Add `OnDeath` delegate for death events
-- [ ] Add `bIsAlive` flag
+- [x] Add `UPROPERTY Health` (int32, default 10)
+- [x] Add `UPROPERTY MaxHealth` (int32, default 10)
+- [x] Add `ApplyDamage(int32 Amount)` function
+- [x] Add `OnDeath` delegate for death events
+- [x] Add `bIsAlive` flag
 
 **Files to modify**:
 - `Source/RobotRally/RobotPawn.h`
 - `Source/RobotRally/RobotPawn.cpp`
 
 #### Task 1.2: Add checkpoint progress
-- [ ] Add `UPROPERTY CurrentCheckpoint` (int32, default 0)
-- [ ] Add `ReachCheckpoint(int32 Number)` function
-- [ ] Add `OnCheckpointReached` delegate
+- [x] Add `UPROPERTY CurrentCheckpoint` (int32, default 0)
+- [x] Add `ReachCheckpoint(int32 Number)` function
+- [x] Add `OnCheckpointReached` delegate
 
 **Files to modify**:
 - `Source/RobotRally/RobotPawn.h`
@@ -103,84 +103,80 @@ Implement tile effects so that conveyors move robots, lasers deal damage, pits d
 **Complexity**: Medium
 
 #### Task 2.1: Create tile effect processor in GameMode
-- [ ] Add `ProcessTileEffects()` function
-- [ ] Call after each register execution (after movement completes)
-- [ ] Get robot's current tile from GridManager
-- [ ] Switch on tile type and apply effect
+- [x] Add `ProcessTileEffects()` function
+- [x] Call after each register execution (after movement completes)
+- [x] Get robot's current tile from GridManager
+- [x] Switch on tile type and apply effect
 
 **Files to modify**:
 - `Source/RobotRally/RobotRallyGameMode.h`
 - `Source/RobotRally/RobotRallyGameMode.cpp`
 
 #### Task 2.2: Implement pit effect
-- [ ] In ProcessTileEffects: if tile is Pit, call robot->TakeDamage(MaxHealth)
-- [ ] Log "Robot fell into pit!"
+- [x] In ProcessTileEffects: if tile is Pit, call robot->ApplyDamage(MaxHealth)
+- [x] Log "Robot fell into pit!"
 
 #### Task 2.3: Implement laser effect
-- [ ] In ProcessTileEffects: if tile is Laser, call robot->TakeDamage(1)
-- [ ] Log "Robot hit by laser! Health: X"
+- [x] In ProcessTileEffects: if tile is Laser, call robot->ApplyDamage(1)
+- [x] Log "Robot hit by laser! Health: X"
 
 #### Task 2.4: Implement checkpoint effect
-- [ ] In ProcessTileEffects: if tile is Checkpoint
-- [ ] Check if CheckpointNumber == robot->CurrentCheckpoint + 1
-- [ ] If yes, call robot->ReachCheckpoint(CheckpointNumber)
-- [ ] Log "Checkpoint X reached!"
+- [x] In ProcessTileEffects: if tile is Checkpoint
+- [x] Check if CheckpointNumber == robot->CurrentCheckpoint + 1
+- [x] If yes, call robot->ReachCheckpoint(CheckpointNumber)
+- [x] Log "Checkpoint X reached!"
 
 ### Phase 3: Conveyor System
 **Complexity**: Medium
 
 #### Task 3.1: Add conveyor processing
-- [ ] Add `ProcessConveyors()` function in GameMode
-- [ ] Call after ProcessTileEffects
-- [ ] Get robot's current tile
-- [ ] If conveyor, determine direction and move robot
+- [x] Add `ProcessConveyors()` function in GameMode
+- [x] Call after ProcessTileEffects
+- [x] Get robot's current tile
+- [x] If conveyor, determine direction and move robot
 
 **Files to modify**:
 - `Source/RobotRally/RobotRallyGameMode.h`
 - `Source/RobotRally/RobotRallyGameMode.cpp`
 
 #### Task 3.2: Implement conveyor movement
-- [ ] Map ETileType to direction delta:
-  - ConveyorNorth: (0, +1)
-  - ConveyorSouth: (0, -1)
-  - ConveyorEast: (+1, 0)
-  - ConveyorWest: (-1, 0)
-- [ ] Call robot movement component to move in that direction
-- [ ] Wait for movement to complete before processing next effect
+- [x] Map ETileType to direction delta (North=+X, South=-X, East=+Y, West=-Y)
+- [x] Call robot movement component MoveToWorldPosition
+- [x] Wait for movement to complete before processing next effect
 
 #### Task 3.3: Handle conveyor chains
-- [ ] After conveyor moves robot, check new tile
-- [ ] If also conveyor, queue another move
-- [ ] Limit chain depth to prevent infinite loops (max 10)
+- [x] After conveyor moves robot, check new tile
+- [x] If also conveyor, queue another move (recursive with depth param)
+- [x] Limit chain depth to prevent infinite loops (max 10)
 
 ### Phase 4: Register Phase Integration
 **Complexity**: Simple
 
 #### Task 4.1: Update ProcessNextRegister flow
-- [ ] Current: Execute card → wait → next register
-- [ ] New: Execute card → wait → ProcessTileEffects → ProcessConveyors → wait → next register
+- [x] Current: Execute card → wait → next register
+- [x] New: Execute card → wait → ProcessTileEffects → ProcessConveyors → wait → next register
 
 **Files to modify**:
 - `Source/RobotRally/RobotRallyGameMode.cpp`
 
 #### Task 4.2: Add phase completion timer
-- [ ] After tile effects and conveyors, add small delay before next register
-- [ ] Allows player to see what happened
+- [x] After tile effects and conveyors, add small delay (0.3s) before next register
+- [x] Allows player to see what happened
 
 ### Phase 5: Win/Lose Conditions
 **Complexity**: Simple
 
 #### Task 5.1: Implement death handling
-- [ ] When robot health <= 0, set bIsAlive = false
-- [ ] Stop processing registers for dead robot
-- [ ] Log "Robot destroyed!"
-- [ ] Transition to GameOver state
+- [x] When robot health <= 0, set bIsAlive = false
+- [x] Stop processing registers for dead robot
+- [x] Log "Robot destroyed!"
+- [x] Transition to GameOver state via CheckWinLoseConditions()
 
 #### Task 5.2: Implement win condition
-- [ ] Track total checkpoints in level (from GridManager)
-- [ ] When robot reaches last checkpoint, trigger win
-- [ ] Log "Victory! All checkpoints reached!"
-- [ ] Transition to GameOver state with win flag
+- [x] Track total checkpoints in level (GridManager::GetTotalCheckpoints)
+- [x] When robot reaches last checkpoint, trigger win
+- [x] Log "Victory! All checkpoints reached!"
+- [x] Transition to GameOver state
 
 **Files to modify**:
 - `Source/RobotRally/RobotRallyGameMode.h`

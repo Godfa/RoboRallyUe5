@@ -23,6 +23,7 @@ Source/RobotRally/
   RobotMovementComponent.h/.cpp  Grid movement (interpolated)
   GridManager.h/.cpp             Game board (10x10 TMap grid)
   RobotRallyGameMode.h/.cpp      Game state machine (FSM)
+  RobotRallyHUD.h/.cpp           On-screen HUD (health, events)
 ```
 
 ## Game Mechanics
@@ -79,12 +80,12 @@ ARobotRallyGameMode          Game state machine, turn logic
 - [x] Folder structure per standards
 - [x] Plugin settings (Enhanced Input)
 
-### Phase 1: Core Structure (C++) — IN PROGRESS
+### Phase 1: Core Structure (C++) — COMPLETE
 - [x] `ARobotPawn` — Header and CPP, basic structure
 - [x] `URobotMovementComponent` — `MoveInGrid()` and `RotateInGrid()` with interpolation
 - [x] `AGridManager` — Grid generation and tile checks
 - [x] `ProcessNextRegister()` — Card execution connected to robot movement
-- [ ] MovementComponent-GridManager connection (grid validation: pits, bounds, obstacles)
+- [x] MovementComponent-GridManager connection (grid validation: bounds check)
 - [ ] Visual debug drawing for grid
 
 ### Phase 2: Logic Layer (GameMode & Cards)
@@ -97,13 +98,16 @@ ARobotRallyGameMode          Game state machine, turn logic
 
 ### Phase 3: Player Control
 - [ ] `ARobotController` (APlayerController) — Mouse clicks and card inputs
-- [ ] `HealthComponent` — Damage, lives, robot destruction and respawn
-- [ ] Checkpoint collection system (flags collected in order)
+- [x] Health system — Damage, death via `ApplyDamage()`, `OnDeath` delegate
+- [x] Checkpoint collection system (flags collected in order)
+- [ ] Robot lives and respawn
 
-### Phase 4: Field Hazards & Environment
-- [ ] Conveyor belts — Move robot at end of turn based on direction
-- [ ] Lasers (`BP_Hazard_Laser`) — Damage robot at end of register
-- [ ] Pits — Robot is destroyed when entering pit
+### Phase 4: Field Hazards & Environment — COMPLETE
+- [x] Conveyor belts — Move robot at end of register, chain support (max 10)
+- [x] Lasers — 1 damage per register
+- [x] Pits — Robot destroyed when entering pit
+- [x] Tile effect processing after each card execution
+- [x] Win condition (all checkpoints) and lose condition (robot death)
 - [ ] Collision checks between robots (pushing)
 
 ### Phase 5: UI & Interface

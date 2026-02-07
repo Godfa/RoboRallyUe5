@@ -9,6 +9,9 @@
 class URobotMovementComponent;
 class UStaticMeshComponent;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnRobotDeath);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCheckpointReached, int32, CheckpointNumber);
+
 UCLASS()
 class ROBOTRALLY_API ARobotPawn : public ACharacter
 {
@@ -56,6 +59,32 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Grid")
 	int32 GridY;
 
+	// Health system
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
+	int32 Health = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Health")
+	int32 MaxHealth = 10;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
+	bool bIsAlive = true;
+
+	UFUNCTION(BlueprintCallable, Category = "Robot|Health")
+	void ApplyDamage(int32 Amount);
+
+	UPROPERTY(BlueprintAssignable, Category = "Robot|Health")
+	FOnRobotDeath OnDeath;
+
+	// Checkpoint progress
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Checkpoint")
+	int32 CurrentCheckpoint = 0;
+
+	UFUNCTION(BlueprintCallable, Category = "Robot|Checkpoint")
+	void ReachCheckpoint(int32 Number);
+
+	UPROPERTY(BlueprintAssignable, Category = "Robot|Checkpoint")
+	FOnCheckpointReached OnCheckpointReached;
+
 	// Executing a command from a card
 	UFUNCTION(BlueprintCallable, Category = "Robot|Actions")
 	void ExecuteMoveCommand(int32 Distance);
@@ -66,4 +95,7 @@ public:
 private:
 	UFUNCTION()
 	void OnGridPositionUpdated(int32 NewGridX, int32 NewGridY);
+
+	// Tracks movement state for detecting manual move completion
+	bool bWasMovingLastFrame = false;
 };

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Robot Rally Team. All Rights Reserved.
 
 #include "RobotRallyGameMode.h"
+#include "RobotRallyHUD.h"
 #include "GridManager.h"
 #include "RobotPawn.h"
 #include "RobotMovementComponent.h"
@@ -16,6 +17,22 @@ ARobotRallyGameMode::ARobotRallyGameMode()
 {
 	CurrentState = EGameState::Programming;
 	DefaultPawnClass = nullptr;
+	HUDClass = ARobotRallyHUD::StaticClass();
+}
+
+void ARobotRallyGameMode::ShowEventMessage(const FString& Text, FColor Color)
+{
+	UE_LOG(LogTemp, Log, TEXT("%s"), *Text);
+
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (PC)
+	{
+		ARobotRallyHUD* HUD = Cast<ARobotRallyHUD>(PC->GetHUD());
+		if (HUD)
+		{
+			HUD->AddEventMessage(Text, Color);
+		}
+	}
 }
 
 void ARobotRallyGameMode::BeginPlay()
@@ -99,6 +116,7 @@ void ARobotRallyGameMode::SetupTestScene()
 
 		FTileData LaserData;
 		LaserData.TileType = ETileType::Laser;
+		GridManagerInstance->SetTileType(FIntVector(6, 5, 0), LaserData);
 		GridManagerInstance->SetTileType(FIntVector(6, 6, 0), LaserData);
 
 		// Spawn robot at grid center (5, 5)
@@ -148,7 +166,7 @@ void ARobotRallyGameMode::SetupTestScene()
 			}
 		}
 
-		UE_LOG(LogTemp, Log, TEXT("Test scene ready: Grid + Robot at (5,5). Use W/S to move, A/D to rotate."));
+		ShowEventMessage(TEXT("Robot ready at (5,5). WASD = move, E = execute cards"), FColor::Cyan);
 	});
 }
 
@@ -157,7 +175,7 @@ void ARobotRallyGameMode::StartProgrammingPhase()
 	CurrentState = EGameState::Programming;
 	CurrentRegister = 0;
 	GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
-	UE_LOG(LogTemp, Log, TEXT("Returned to Programming phase. Press E to execute cards."));
+	ShowEventMessage(TEXT("Programming phase. Press E to execute cards."), FColor::Cyan);
 }
 
 void ARobotRallyGameMode::StartExecutionPhase()
@@ -165,15 +183,27 @@ void ARobotRallyGameMode::StartExecutionPhase()
 	CurrentState = EGameState::Executing;
 	CurrentRegister = 0;
 	SetupTestCards();
-	UE_LOG(LogTemp, Log, TEXT("Starting Execution phase with %d cards."), ProgrammedCards.Num());
+	ShowEventMessage(TEXT("Executing cards..."), FColor::Cyan);
 	ProcessNextRegister();
 }
 
 void ARobotRallyGameMode::ProcessNextRegister()
 {
+	if (CurrentState == EGameState::GameOver)
+	{
+		return;
+	}
+
+	if (!TestRobot || !TestRobot->bIsAlive)
+	{
+		ShowEventMessage(TEXT("Robot is dead, stopping execution."), FColor::Red);
+		CurrentState = EGameState::GameOver;
+		return;
+	}
+
 	if (CurrentRegister >= NUM_REGISTERS)
 	{
-		UE_LOG(LogTemp, Log, TEXT("All registers executed. Returning to Programming phase."));
+		ShowEventMessage(TEXT("All registers executed."), FColor::Green);
 		StartProgrammingPhase();
 		return;
 	}
@@ -186,7 +216,15 @@ void ARobotRallyGameMode::ProcessNextRegister()
 	}
 
 	FRobotCard Card = ProgrammedCards[CurrentRegister];
-	UE_LOG(LogTemp, Log, TEXT("Executing Register %d: Action %d"), CurrentRegister, static_cast<int32>(Card.Action));
+
+	// Show card name on HUD
+	static const TCHAR* CardNames[] = {
+		TEXT("Move 1"), TEXT("Move 2"), TEXT("Move 3"), TEXT("Move Back"),
+		TEXT("Rotate Right"), TEXT("Rotate Left"), TEXT("U-Turn")
+	};
+	int32 ActionIdx = static_cast<int32>(Card.Action);
+	FString CardName = (ActionIdx >= 0 && ActionIdx < 7) ? CardNames[ActionIdx] : TEXT("???");
+	ShowEventMessage(FString::Printf(TEXT("Register %d: %s"), CurrentRegister + 1, *CardName), FColor::White);
 
 	ExecuteCardAction(Card.Action);
 	CurrentRegister++;
@@ -247,7 +285,188 @@ void ARobotRallyGameMode::CheckMovementComplete()
 	if (!bStillMoving)
 	{
 		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
-		ProcessNextRegister();
+		// After card movement completes, process tile effects
+		ProcessTileEffects();
+	}
+}
+
+void ARobotRallyGameMode::ProcessTileEffects()
+{
+	if (!TestRobot || !TestRobot->bIsAlive || !GridManagerInstance)
+	{
+		OnTileEffectsComplete();
+		return;
+	}
+
+	FIntVector RobotCoords(TestRobot->GridX, TestRobot->GridY, 0);
+	FTileData TileData = GridManagerInstance->GetTileData(RobotCoords);
+
+	switch (TileData.TileType)
+	{
+	case ETileType::Pit:
+		ShowEventMessage(FString::Printf(TEXT("Robot fell into a pit at (%d, %d)!"), RobotCoords.X, RobotCoords.Y), FColor::Red);
+		TestRobot->ApplyDamage(TestRobot->MaxHealth);
+		break;
+
+	case ETileType::Laser:
+		ShowEventMessage(FString::Printf(TEXT("Laser hit! -1 HP at (%d, %d)"), RobotCoords.X, RobotCoords.Y), FColor::Orange);
+		TestRobot->ApplyDamage(1);
+		break;
+
+	case ETileType::Checkpoint:
+		if (TileData.CheckpointNumber == TestRobot->CurrentCheckpoint + 1)
+		{
+			ShowEventMessage(FString::Printf(TEXT("Checkpoint %d reached!"), TileData.CheckpointNumber), FColor::Yellow);
+		}
+		TestRobot->ReachCheckpoint(TileData.CheckpointNumber);
+		break;
+
+	default:
+		break;
+	}
+
+	// Process conveyors after other effects
+	ProcessConveyors();
+}
+
+void ARobotRallyGameMode::ProcessConveyors(int32 ChainDepth)
+{
+	if (!TestRobot || !TestRobot->bIsAlive || !GridManagerInstance)
+	{
+		OnTileEffectsComplete();
+		return;
+	}
+
+	if (ChainDepth >= MAX_CONVEYOR_CHAIN)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Conveyor chain depth limit reached (%d)!"), MAX_CONVEYOR_CHAIN);
+		OnTileEffectsComplete();
+		return;
+	}
+
+	FIntVector RobotCoords(TestRobot->GridX, TestRobot->GridY, 0);
+	ETileType TileType = GridManagerInstance->GetTileType(RobotCoords);
+
+	int32 DX = 0, DY = 0;
+	switch (TileType)
+	{
+	case ETileType::ConveyorNorth: DX = 1;  DY = 0;  break;
+	case ETileType::ConveyorSouth: DX = -1; DY = 0;  break;
+	case ETileType::ConveyorEast:  DX = 0;  DY = 1;  break;
+	case ETileType::ConveyorWest:  DX = 0;  DY = -1; break;
+	default:
+		// Not on a conveyor, done
+		OnTileEffectsComplete();
+		return;
+	}
+
+	// Move robot to conveyor destination
+	int32 NewX = TestRobot->GridX + DX;
+	int32 NewY = TestRobot->GridY + DY;
+
+	ShowEventMessage(FString::Printf(TEXT("Conveyor: (%d,%d) -> (%d,%d)"),
+		TestRobot->GridX, TestRobot->GridY, NewX, NewY), FColor::Cyan);
+
+	// Update grid position and start smooth movement
+	TestRobot->GridX = NewX;
+	TestRobot->GridY = NewY;
+
+	if (TestRobot->RobotMovement)
+	{
+		TestRobot->RobotMovement->SetGridPosition(NewX, NewY);
+		FVector NewWorldPos = GridManagerInstance->GridToWorld(FIntVector(NewX, NewY, 0));
+		TestRobot->RobotMovement->MoveToWorldPosition(NewWorldPos);
+	}
+
+	// Wait for conveyor movement to complete, then check for chains
+	int32 NextChainDepth = ChainDepth + 1;
+	GetWorld()->GetTimerManager().SetTimer(
+		TileEffectTimerHandle,
+		[this, NextChainDepth]()
+		{
+			if (!TestRobot || !TestRobot->RobotMovement)
+			{
+				OnTileEffectsComplete();
+				return;
+			}
+			if (!TestRobot->RobotMovement->IsMoving())
+			{
+				GetWorld()->GetTimerManager().ClearTimer(TileEffectTimerHandle);
+				// Check for pit/laser on new tile, then chain conveyors
+				if (GridManagerInstance && TestRobot->bIsAlive)
+				{
+					FIntVector NewCoords(TestRobot->GridX, TestRobot->GridY, 0);
+					FTileData NewTile = GridManagerInstance->GetTileData(NewCoords);
+					if (NewTile.TileType == ETileType::Pit)
+					{
+						ShowEventMessage(TEXT("Conveyor pushed robot into pit!"), FColor::Red);
+						TestRobot->ApplyDamage(TestRobot->MaxHealth);
+					}
+					else if (NewTile.TileType == ETileType::Laser)
+					{
+						ShowEventMessage(TEXT("Conveyor pushed robot into laser! -1 HP"), FColor::Orange);
+						TestRobot->ApplyDamage(1);
+					}
+					else if (NewTile.TileType == ETileType::Checkpoint)
+					{
+						if (NewTile.CheckpointNumber == TestRobot->CurrentCheckpoint + 1)
+						{
+							ShowEventMessage(FString::Printf(TEXT("Checkpoint %d reached!"), NewTile.CheckpointNumber), FColor::Yellow);
+						}
+						TestRobot->ReachCheckpoint(NewTile.CheckpointNumber);
+					}
+				}
+				ProcessConveyors(NextChainDepth);
+			}
+		},
+		0.1f,
+		true);
+}
+
+void ARobotRallyGameMode::CheckWinLoseConditions()
+{
+	if (!TestRobot) return;
+
+	if (!TestRobot->bIsAlive)
+	{
+		ShowEventMessage(TEXT("GAME OVER - Robot destroyed!"), FColor::Red);
+		CurrentState = EGameState::GameOver;
+		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
+		GetWorld()->GetTimerManager().ClearTimer(TileEffectTimerHandle);
+		return;
+	}
+
+	if (GridManagerInstance)
+	{
+		int32 TotalCheckpoints = GridManagerInstance->GetTotalCheckpoints();
+		if (TotalCheckpoints > 0 && TestRobot->CurrentCheckpoint >= TotalCheckpoints)
+		{
+			ShowEventMessage(FString::Printf(TEXT("VICTORY! All %d checkpoints reached!"), TotalCheckpoints), FColor::Green);
+			CurrentState = EGameState::GameOver;
+			GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
+			GetWorld()->GetTimerManager().ClearTimer(TileEffectTimerHandle);
+			return;
+		}
+	}
+}
+
+void ARobotRallyGameMode::OnTileEffectsComplete()
+{
+	CheckWinLoseConditions();
+
+	if (CurrentState == EGameState::GameOver) return;
+
+	// Only continue register execution if in Executing phase
+	// (manual WASD moves also call ProcessTileEffects but shouldn't advance registers)
+	if (CurrentState == EGameState::Executing)
+	{
+		FTimerHandle DelayHandle;
+		GetWorld()->GetTimerManager().SetTimer(
+			DelayHandle,
+			this,
+			&ARobotRallyGameMode::ProcessNextRegister,
+			0.3f,
+			false);
 	}
 }
 
@@ -255,31 +474,36 @@ void ARobotRallyGameMode::SetupTestCards()
 {
 	ProgrammedCards.Empty();
 
-	// Test sequence: Move1, RotateRight, Move2, RotateLeft, MoveBack
+	// Demo route from (5,5) facing North:
+	// 1. Move1 -> (6,5) LASER! takes 1 damage
+	// 2. Move1 -> (7,5) safe
+	// 3. RotateRight -> face East
+	// 4. Move2 -> (7,7) PIT! robot dies
+	// 5. (won't execute - robot is dead)
 	FRobotCard Card1;
 	Card1.Action = ECardAction::Move1;
 	Card1.Priority = 100;
 	ProgrammedCards.Add(Card1);
 
 	FRobotCard Card2;
-	Card2.Action = ECardAction::RotateRight;
+	Card2.Action = ECardAction::Move1;
 	Card2.Priority = 200;
 	ProgrammedCards.Add(Card2);
 
 	FRobotCard Card3;
-	Card3.Action = ECardAction::Move2;
+	Card3.Action = ECardAction::RotateRight;
 	Card3.Priority = 300;
 	ProgrammedCards.Add(Card3);
 
 	FRobotCard Card4;
-	Card4.Action = ECardAction::RotateLeft;
+	Card4.Action = ECardAction::Move2;
 	Card4.Priority = 400;
 	ProgrammedCards.Add(Card4);
 
 	FRobotCard Card5;
-	Card5.Action = ECardAction::MoveBack;
+	Card5.Action = ECardAction::Move1;
 	Card5.Priority = 500;
 	ProgrammedCards.Add(Card5);
 
-	UE_LOG(LogTemp, Log, TEXT("Test cards loaded: Move1, RotateRight, Move2, RotateLeft, MoveBack"));
+	UE_LOG(LogTemp, Log, TEXT("Test cards loaded: Move1, Move1, RotateRight, Move2, Move1 (hits laser + pit)"));
 }

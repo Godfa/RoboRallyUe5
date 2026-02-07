@@ -8,6 +8,7 @@
 
 class AGridManager;
 class ARobotPawn;
+class ARobotRallyHUD;
 
 UENUM(BlueprintType)
 enum class ECardAction : uint8
@@ -73,6 +74,13 @@ public:
 
 	static constexpr int32 NUM_REGISTERS = 5;
 
+	// Tile hazard processing (public so RobotPawn can trigger after manual moves)
+	UFUNCTION(BlueprintCallable, Category = "Game")
+	void ProcessTileEffects();
+
+	// Push a message to the on-screen event log
+	void ShowEventMessage(const FString& Text, FColor Color = FColor::White);
+
 private:
 	void ProcessNextRegister();
 	void SetupTestScene();
@@ -80,6 +88,13 @@ private:
 	void CheckMovementComplete();
 	void SetupTestCards();
 
+	void ProcessConveyors(int32 ChainDepth = 0);
+	void CheckWinLoseConditions();
+	void OnTileEffectsComplete();
+
 	int32 CurrentRegister = 0;
 	FTimerHandle MovementCheckTimerHandle;
+	FTimerHandle TileEffectTimerHandle;
+
+	static constexpr int32 MAX_CONVEYOR_CHAIN = 10;
 };
