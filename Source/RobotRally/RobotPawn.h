@@ -95,7 +95,4 @@ public:
 private:
 	UFUNCTION()
 	void OnGridPositionUpdated(int32 NewGridX, int32 NewGridY);
-
-	// Tracks movement state for detecting manual move completion
-	bool bWasMovingLastFrame = false;
 };

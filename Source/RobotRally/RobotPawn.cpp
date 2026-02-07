@@ -160,40 +160,52 @@ void ARobotPawn::Tick(float DeltaTime)
 
 	if (!bIsAlive) return;
 
-	bool bCurrentlyMoving = RobotMovement && (RobotMovement->IsMoving() || RobotMovement->IsRotating());
-
-	// Detect when manual movement just completed -> trigger tile effects
-	if (bWasMovingLastFrame && !bCurrentlyMoving)
-	{
-		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
-		if (GM && GM->CurrentState == EGameState::Programming)
-		{
-			GM->ProcessTileEffects();
-		}
-	}
-	bWasMovingLastFrame = bCurrentlyMoving;
-
 	// Simple keyboard input for testing
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC) return;
 
+	bool bCurrentlyMoving = RobotMovement && (RobotMovement->IsMoving() || RobotMovement->IsRotating());
 	if (bCurrentlyMoving) return;
 
+	ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+
+	// Block input while tile effects (conveyors etc.) are processing
+	if (GM && GM->bProcessingTileEffects) return;
+
+	bool bDidMove = false;
+
 	if (PC->WasInputKeyJustPressed(EKeys::W))
+	{
 		ExecuteMoveCommand(1);
+		bDidMove = true;
+	}
 	else if (PC->WasInputKeyJustPressed(EKeys::S))
+	{
 		ExecuteMoveCommand(-1);
+		bDidMove = true;
+	}
 	else if (PC->WasInputKeyJustPressed(EKeys::D))
+	{
 		ExecuteRotateCommand(1);
+		bDidMove = true;
+	}
 	else if (PC->WasInputKeyJustPressed(EKeys::A))
+	{
 		ExecuteRotateCommand(-1);
+		bDidMove = true;
+	}
 	else if (PC->WasInputKeyJustPressed(EKeys::E))
 	{
-		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
 		if (GM && GM->CurrentState == EGameState::Programming)
 		{
 			GM->StartExecutionPhase();
 		}
+	}
+
+	// After WASD input, tell GameMode to poll for movement completion -> tile effects
+	if (bDidMove && GM && GM->CurrentState == EGameState::Programming)
+	{
+		GM->StartManualMoveTick();
 	}
 }
 

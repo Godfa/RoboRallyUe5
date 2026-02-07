@@ -20,12 +20,19 @@ AGridManager::AGridManager()
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = SceneRoot;
 
-	// Cache cube mesh reference
+	// Cache mesh references
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeFinder(
 		TEXT("/Engine/BasicShapes/Cube.Cube"));
 	if (CubeFinder.Succeeded())
 	{
 		CachedCubeMesh = CubeFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> ConeFinder(
+		TEXT("/Engine/BasicShapes/Cone.Cone"));
+	if (ConeFinder.Succeeded())
+	{
+		CachedConeMesh = ConeFinder.Object;
 	}
 }
 
@@ -172,6 +179,13 @@ void AGridManager::SetTileType(FIntVector Coords, const FTileData& Data)
 	{
 		SpawnTileMesh(Coords, Data);
 	}
+
+	// Handle conveyor arrow
+	DestroyConveyorArrow(Coords);
+	if (IsConveyor(Data.TileType))
+	{
+		SpawnConveyorArrow(Coords, Data.TileType);
+	}
 }
 
 void AGridManager::RefreshAllTileVisuals()
@@ -186,10 +200,24 @@ void AGridManager::RefreshAllTileVisuals()
 	}
 	TileMeshes.Empty();
 
+	// Destroy existing arrow meshes
+	for (auto& Pair : ArrowMeshes)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->DestroyComponent();
+		}
+	}
+	ArrowMeshes.Empty();
+
 	// Spawn new meshes for all tiles
 	for (auto& Pair : GridMap)
 	{
 		SpawnTileMesh(Pair.Key, Pair.Value);
+		if (IsConveyor(Pair.Value.TileType))
+		{
+			SpawnConveyorArrow(Pair.Key, Pair.Value.TileType);
+		}
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("GridManager: Spawned %d tile meshes"), TileMeshes.Num());
@@ -248,6 +276,69 @@ void AGridManager::SpawnTileMesh(FIntVector Coords, const FTileData& Data)
 	TileMesh->RegisterComponent();
 
 	TileMeshes.Add(Coords, TileMesh);
+}
+
+void AGridManager::SpawnConveyorArrow(FIntVector Coords, ETileType Type)
+{
+	if (!CachedConeMesh || !CachedBaseMaterial) return;
+
+	FString CompName = FString::Printf(TEXT("Arrow_%d_%d"), Coords.X, Coords.Y);
+	UStaticMeshComponent* Arrow = NewObject<UStaticMeshComponent>(this, FName(*CompName));
+	Arrow->SetupAttachment(RootComponent);
+	Arrow->SetStaticMesh(CachedConeMesh);
+
+	// Position on top of tile
+	FVector ArrowPos(Coords.X * TileSize, Coords.Y * TileSize, 4.0f);
+	Arrow->SetRelativeLocation(ArrowPos);
+
+	// Tilt cone to lay flat (pitch -90), then yaw for direction
+	float Yaw = GetConveyorYaw(Type);
+	Arrow->SetRelativeRotation(FRotator(-90.0f, Yaw, 0.0f));
+
+	// Scale small
+	Arrow->SetRelativeScale3D(FVector(0.18f, 0.18f, 0.25f));
+
+	// Bright arrow color
+	UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(CachedBaseMaterial, this);
+	MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.9f, 0.95f, 1.0f));
+	Arrow->SetMaterial(0, MID);
+
+	Arrow->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Arrow->RegisterComponent();
+
+	ArrowMeshes.Add(Coords, Arrow);
+}
+
+void AGridManager::DestroyConveyorArrow(FIntVector Coords)
+{
+	if (UStaticMeshComponent** Existing = ArrowMeshes.Find(Coords))
+	{
+		if (*Existing)
+		{
+			(*Existing)->DestroyComponent();
+		}
+		ArrowMeshes.Remove(Coords);
+	}
+}
+
+bool AGridManager::IsConveyor(ETileType Type)
+{
+	return Type == ETileType::ConveyorNorth
+		|| Type == ETileType::ConveyorSouth
+		|| Type == ETileType::ConveyorEast
+		|| Type == ETileType::ConveyorWest;
+}
+
+float AGridManager::GetConveyorYaw(ETileType Type)
+{
+	switch (Type)
+	{
+	case ETileType::ConveyorNorth: return 0.0f;    // +X
+	case ETileType::ConveyorEast:  return 90.0f;   // +Y
+	case ETileType::ConveyorSouth: return 180.0f;  // -X
+	case ETileType::ConveyorWest:  return 270.0f;  // -Y
+	default:                       return 0.0f;
+	}
 }
 
 FLinearColor AGridManager::GetTileColor(ETileType Type)

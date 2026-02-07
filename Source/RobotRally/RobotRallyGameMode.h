@@ -78,6 +78,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Game")
 	void ProcessTileEffects();
 
+	// True while tile effects/conveyors are being processed (prevents re-triggering)
+	bool bProcessingTileEffects = false;
+
+	// Called by RobotPawn after WASD input to start polling for movement completion
+	void StartManualMoveTick();
+
 	// Push a message to the on-screen event log
 	void ShowEventMessage(const FString& Text, FColor Color = FColor::White);
 
@@ -88,13 +94,14 @@ private:
 	void CheckMovementComplete();
 	void SetupTestCards();
 
-	void ProcessConveyors(int32 ChainDepth = 0);
+	void ProcessConveyors();
 	void CheckWinLoseConditions();
 	void OnTileEffectsComplete();
 
 	int32 CurrentRegister = 0;
 	FTimerHandle MovementCheckTimerHandle;
 	FTimerHandle TileEffectTimerHandle;
+	FTimerHandle ManualMoveTimerHandle;
 
-	static constexpr int32 MAX_CONVEYOR_CHAIN = 10;
+	void CheckManualMoveComplete();
 };

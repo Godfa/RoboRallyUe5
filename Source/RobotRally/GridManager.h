@@ -105,19 +105,33 @@ public:
 	// Get color for a tile type
 	static FLinearColor GetTileColor(ETileType Type);
 
+	// Returns true if tile type is a conveyor
+	static bool IsConveyor(ETileType Type);
+
+	// Get yaw rotation for conveyor arrow
+	static float GetConveyorYaw(ETileType Type);
+
 private:
 	void InitializeGrid();
 	void SpawnTileMesh(FIntVector Coords, const FTileData& Data);
+	void SpawnConveyorArrow(FIntVector Coords, ETileType Type);
+	void DestroyConveyorArrow(FIntVector Coords);
 	void CreateBaseMaterial();
 
 	UPROPERTY()
 	TMap<FIntVector, UStaticMeshComponent*> TileMeshes;
 
 	UPROPERTY()
+	TMap<FIntVector, UStaticMeshComponent*> ArrowMeshes;
+
+	UPROPERTY()
 	USceneComponent* SceneRoot;
 
 	UPROPERTY()
 	UStaticMesh* CachedCubeMesh;
+
+	UPROPERTY()
+	UStaticMesh* CachedConeMesh;
 
 	UPROPERTY()
 	UMaterialInterface* CachedBaseMaterial;

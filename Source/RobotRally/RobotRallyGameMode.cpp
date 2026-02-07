@@ -93,16 +93,43 @@ void ARobotRallyGameMode::SetupTestScene()
 		GridManagerInstance->SetTileType(FIntVector(3, 4, 0), PitData);
 		GridManagerInstance->SetTileType(FIntVector(7, 7, 0), PitData);
 
-		FTileData ConveyorData;
-		ConveyorData.TileType = ETileType::ConveyorNorth;
-		GridManagerInstance->SetTileType(FIntVector(5, 2, 0), ConveyorData);
-		GridManagerInstance->SetTileType(FIntVector(5, 3, 0), ConveyorData);
-		GridManagerInstance->SetTileType(FIntVector(5, 4, 0), ConveyorData);
+		// Conveyor belt 1: L-shaped path going East then turning North
+		// (1,7) -> (2,7) -> (3,7) East, then (3,8) -> (3,9) North
+		FTileData ConvEast;
+		ConvEast.TileType = ETileType::ConveyorEast;
+		GridManagerInstance->SetTileType(FIntVector(1, 7, 0), ConvEast);
+		GridManagerInstance->SetTileType(FIntVector(2, 7, 0), ConvEast);
+		GridManagerInstance->SetTileType(FIntVector(3, 7, 0), ConvEast);
 
-		FTileData ConveyorEast;
-		ConveyorEast.TileType = ETileType::ConveyorEast;
-		GridManagerInstance->SetTileType(FIntVector(2, 7, 0), ConveyorEast);
-		GridManagerInstance->SetTileType(FIntVector(3, 7, 0), ConveyorEast);
+		FTileData ConvNorthTurn;
+		ConvNorthTurn.TileType = ETileType::ConveyorNorth;
+		GridManagerInstance->SetTileType(FIntVector(3, 8, 0), ConvNorthTurn);
+		GridManagerInstance->SetTileType(FIntVector(3, 9, 0), ConvNorthTurn);
+
+		// Conveyor belt 2: Straight South path
+		// (8,6) -> (8,5) -> (8,4) -> (8,3) South
+		FTileData ConvSouth;
+		ConvSouth.TileType = ETileType::ConveyorSouth;
+		GridManagerInstance->SetTileType(FIntVector(8, 6, 0), ConvSouth);
+		GridManagerInstance->SetTileType(FIntVector(8, 5, 0), ConvSouth);
+		GridManagerInstance->SetTileType(FIntVector(8, 4, 0), ConvSouth);
+		GridManagerInstance->SetTileType(FIntVector(8, 3, 0), ConvSouth);
+
+		// Conveyor belt 3: U-shaped path near center
+		// (5,1) -> (5,2) -> (5,3) North, then (6,3) East turn, then (6,4) North again
+		FTileData ConvNorth;
+		ConvNorth.TileType = ETileType::ConveyorNorth;
+		GridManagerInstance->SetTileType(FIntVector(5, 1, 0), ConvNorth);
+		GridManagerInstance->SetTileType(FIntVector(5, 2, 0), ConvNorth);
+		GridManagerInstance->SetTileType(FIntVector(5, 3, 0), ConvNorth);
+
+		FTileData ConvEastTurn;
+		ConvEastTurn.TileType = ETileType::ConveyorEast;
+		GridManagerInstance->SetTileType(FIntVector(6, 3, 0), ConvEastTurn);
+
+		FTileData ConvNorth2;
+		ConvNorth2.TileType = ETileType::ConveyorNorth;
+		GridManagerInstance->SetTileType(FIntVector(6, 4, 0), ConvNorth2);
 
 		FTileData CheckpointData;
 		CheckpointData.TileType = ETileType::Checkpoint;
@@ -292,6 +319,8 @@ void ARobotRallyGameMode::CheckMovementComplete()
 
 void ARobotRallyGameMode::ProcessTileEffects()
 {
+	bProcessingTileEffects = true;
+
 	if (!TestRobot || !TestRobot->bIsAlive || !GridManagerInstance)
 	{
 		OnTileEffectsComplete();
@@ -329,17 +358,10 @@ void ARobotRallyGameMode::ProcessTileEffects()
 	ProcessConveyors();
 }
 
-void ARobotRallyGameMode::ProcessConveyors(int32 ChainDepth)
+void ARobotRallyGameMode::ProcessConveyors()
 {
 	if (!TestRobot || !TestRobot->bIsAlive || !GridManagerInstance)
 	{
-		OnTileEffectsComplete();
-		return;
-	}
-
-	if (ChainDepth >= MAX_CONVEYOR_CHAIN)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Conveyor chain depth limit reached (%d)!"), MAX_CONVEYOR_CHAIN);
 		OnTileEffectsComplete();
 		return;
 	}
@@ -355,19 +377,17 @@ void ARobotRallyGameMode::ProcessConveyors(int32 ChainDepth)
 	case ETileType::ConveyorEast:  DX = 0;  DY = 1;  break;
 	case ETileType::ConveyorWest:  DX = 0;  DY = -1; break;
 	default:
-		// Not on a conveyor, done
 		OnTileEffectsComplete();
 		return;
 	}
 
-	// Move robot to conveyor destination
+	// Move robot one tile in conveyor direction (once per register)
 	int32 NewX = TestRobot->GridX + DX;
 	int32 NewY = TestRobot->GridY + DY;
 
 	ShowEventMessage(FString::Printf(TEXT("Conveyor: (%d,%d) -> (%d,%d)"),
 		TestRobot->GridX, TestRobot->GridY, NewX, NewY), FColor::Cyan);
 
-	// Update grid position and start smooth movement
 	TestRobot->GridX = NewX;
 	TestRobot->GridY = NewY;
 
@@ -378,11 +398,10 @@ void ARobotRallyGameMode::ProcessConveyors(int32 ChainDepth)
 		TestRobot->RobotMovement->MoveToWorldPosition(NewWorldPos);
 	}
 
-	// Wait for conveyor movement to complete, then check for chains
-	int32 NextChainDepth = ChainDepth + 1;
+	// Wait for movement to complete, then check destination tile
 	GetWorld()->GetTimerManager().SetTimer(
 		TileEffectTimerHandle,
-		[this, NextChainDepth]()
+		[this]()
 		{
 			if (!TestRobot || !TestRobot->RobotMovement)
 			{
@@ -392,7 +411,8 @@ void ARobotRallyGameMode::ProcessConveyors(int32 ChainDepth)
 			if (!TestRobot->RobotMovement->IsMoving())
 			{
 				GetWorld()->GetTimerManager().ClearTimer(TileEffectTimerHandle);
-				// Check for pit/laser on new tile, then chain conveyors
+
+				// Check for hazards on the destination tile
 				if (GridManagerInstance && TestRobot->bIsAlive)
 				{
 					FIntVector NewCoords(TestRobot->GridX, TestRobot->GridY, 0);
@@ -416,7 +436,8 @@ void ARobotRallyGameMode::ProcessConveyors(int32 ChainDepth)
 						TestRobot->ReachCheckpoint(NewTile.CheckpointNumber);
 					}
 				}
-				ProcessConveyors(NextChainDepth);
+
+				OnTileEffectsComplete();
 			}
 		},
 		0.1f,
@@ -452,6 +473,8 @@ void ARobotRallyGameMode::CheckWinLoseConditions()
 
 void ARobotRallyGameMode::OnTileEffectsComplete()
 {
+	bProcessingTileEffects = false;
+
 	CheckWinLoseConditions();
 
 	if (CurrentState == EGameState::GameOver) return;
@@ -467,6 +490,37 @@ void ARobotRallyGameMode::OnTileEffectsComplete()
 			&ARobotRallyGameMode::ProcessNextRegister,
 			0.3f,
 			false);
+	}
+}
+
+void ARobotRallyGameMode::StartManualMoveTick()
+{
+	bProcessingTileEffects = true;
+
+	// Poll for movement completion, then trigger tile effects
+	GetWorld()->GetTimerManager().SetTimer(
+		ManualMoveTimerHandle,
+		this,
+		&ARobotRallyGameMode::CheckManualMoveComplete,
+		0.05f,
+		true);
+}
+
+void ARobotRallyGameMode::CheckManualMoveComplete()
+{
+	if (!TestRobot || !TestRobot->RobotMovement)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(ManualMoveTimerHandle);
+		bProcessingTileEffects = false;
+		return;
+	}
+
+	bool bStillMoving = TestRobot->RobotMovement->IsMoving() || TestRobot->RobotMovement->IsRotating();
+	if (!bStillMoving)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(ManualMoveTimerHandle);
+		// Movement done — now process tile effects (which may start conveyor movement)
+		ProcessTileEffects();
 	}
 }
 
