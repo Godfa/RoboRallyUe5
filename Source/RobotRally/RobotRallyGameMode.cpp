@@ -93,43 +93,43 @@ void ARobotRallyGameMode::SetupTestScene()
 		GridManagerInstance->SetTileType(FIntVector(3, 4, 0), PitData);
 		GridManagerInstance->SetTileType(FIntVector(7, 7, 0), PitData);
 
-		// Conveyor belt 1: L-shaped path going East then turning North
-		// (1,7) -> (2,7) -> (3,7) East, then (3,8) -> (3,9) North
+		// Conveyor belt 1: L-shaped, goes up (+X=North) then right (+Y=East)
+		// (1,7)->(2,7)->(3,7) North, turn at (3,7)->East, (3,8)->(3,9) East
+		FTileData ConvNorth;
+		ConvNorth.TileType = ETileType::ConveyorNorth;
+		GridManagerInstance->SetTileType(FIntVector(1, 7, 0), ConvNorth);
+		GridManagerInstance->SetTileType(FIntVector(2, 7, 0), ConvNorth);
+
+		FTileData ConvEastTurn1;
+		ConvEastTurn1.TileType = ETileType::ConveyorEast;
+		GridManagerInstance->SetTileType(FIntVector(3, 7, 0), ConvEastTurn1);
+		GridManagerInstance->SetTileType(FIntVector(3, 8, 0), ConvEastTurn1);
+		GridManagerInstance->SetTileType(FIntVector(3, 9, 0), ConvEastTurn1);
+
+		// Conveyor belt 2: Straight West path (-Y direction on screen = left)
+		// (8,6) -> (8,5) -> (8,4) -> (8,3)
+		FTileData ConvWest;
+		ConvWest.TileType = ETileType::ConveyorWest;
+		GridManagerInstance->SetTileType(FIntVector(8, 6, 0), ConvWest);
+		GridManagerInstance->SetTileType(FIntVector(8, 5, 0), ConvWest);
+		GridManagerInstance->SetTileType(FIntVector(8, 4, 0), ConvWest);
+		GridManagerInstance->SetTileType(FIntVector(8, 3, 0), ConvWest);
+
+		// Conveyor belt 3: Goes right (+Y=East), turns up (+X=North), then right again
+		// (5,1)->(5,2)->(5,3) East, turn at (5,3)->North, (6,3)->(6,4) East
 		FTileData ConvEast;
 		ConvEast.TileType = ETileType::ConveyorEast;
-		GridManagerInstance->SetTileType(FIntVector(1, 7, 0), ConvEast);
-		GridManagerInstance->SetTileType(FIntVector(2, 7, 0), ConvEast);
-		GridManagerInstance->SetTileType(FIntVector(3, 7, 0), ConvEast);
+		GridManagerInstance->SetTileType(FIntVector(5, 1, 0), ConvEast);
+		GridManagerInstance->SetTileType(FIntVector(5, 2, 0), ConvEast);
 
 		FTileData ConvNorthTurn;
 		ConvNorthTurn.TileType = ETileType::ConveyorNorth;
-		GridManagerInstance->SetTileType(FIntVector(3, 8, 0), ConvNorthTurn);
-		GridManagerInstance->SetTileType(FIntVector(3, 9, 0), ConvNorthTurn);
+		GridManagerInstance->SetTileType(FIntVector(5, 3, 0), ConvNorthTurn);
 
-		// Conveyor belt 2: Straight South path
-		// (8,6) -> (8,5) -> (8,4) -> (8,3) South
-		FTileData ConvSouth;
-		ConvSouth.TileType = ETileType::ConveyorSouth;
-		GridManagerInstance->SetTileType(FIntVector(8, 6, 0), ConvSouth);
-		GridManagerInstance->SetTileType(FIntVector(8, 5, 0), ConvSouth);
-		GridManagerInstance->SetTileType(FIntVector(8, 4, 0), ConvSouth);
-		GridManagerInstance->SetTileType(FIntVector(8, 3, 0), ConvSouth);
-
-		// Conveyor belt 3: U-shaped path near center
-		// (5,1) -> (5,2) -> (5,3) North, then (6,3) East turn, then (6,4) North again
-		FTileData ConvNorth;
-		ConvNorth.TileType = ETileType::ConveyorNorth;
-		GridManagerInstance->SetTileType(FIntVector(5, 1, 0), ConvNorth);
-		GridManagerInstance->SetTileType(FIntVector(5, 2, 0), ConvNorth);
-		GridManagerInstance->SetTileType(FIntVector(5, 3, 0), ConvNorth);
-
-		FTileData ConvEastTurn;
-		ConvEastTurn.TileType = ETileType::ConveyorEast;
-		GridManagerInstance->SetTileType(FIntVector(6, 3, 0), ConvEastTurn);
-
-		FTileData ConvNorth2;
-		ConvNorth2.TileType = ETileType::ConveyorNorth;
-		GridManagerInstance->SetTileType(FIntVector(6, 4, 0), ConvNorth2);
+		FTileData ConvEast2;
+		ConvEast2.TileType = ETileType::ConveyorEast;
+		GridManagerInstance->SetTileType(FIntVector(6, 3, 0), ConvEast2);
+		GridManagerInstance->SetTileType(FIntVector(6, 4, 0), ConvEast2);
 
 		FTileData CheckpointData;
 		CheckpointData.TileType = ETileType::Checkpoint;
