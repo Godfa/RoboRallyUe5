@@ -33,6 +33,13 @@ Welcome to the RobotRally UE5 project documentation!
 - Performance tips
 - Blueprint integration guide
 
+**[Testing Plans](plans/README.md)** - Comprehensive testing documentation
+- 740+ test cases across all 6 phases
+- Phase-by-phase testing checklists
+- Manual and automated testing procedures
+- Performance and integration testing
+- Success criteria and validation
+
 ### 📝 Project Management
 
 **[CHANGELOG.md](../CHANGELOG.md)** - Version history
@@ -82,6 +89,12 @@ Welcome to the RobotRally UE5 project documentation!
 **...see the class hierarchy**
 → [Technical Documentation - Architecture](TECHNICAL_DOCUMENTATION.md#class-hierarchy)
 
+**...test a specific phase**
+→ [Testing Plans - Phase Index](plans/README.md)
+
+**...verify game quality**
+→ [Testing Plans - Success Criteria](plans/README.md#success-criteria-overall-project)
+
 ---
 
 ## Documentation Structure
@@ -92,7 +105,14 @@ docs/
 ├── USER_GUIDE.md                  ← Player-facing guide
 ├── TECHNICAL_DOCUMENTATION.md     ← Architecture deep-dive
 ├── API_REFERENCE.md               ← Developer API quick reference
-└── plans/                         ← Future: feature implementation plans
+└── plans/                         ← Testing plans and feature designs
+    ├── README.md                  ← Testing plans index
+    ├── 2026-02-08_phase1-testing-plan.md
+    ├── 2026-02-08_phase2-testing-plan.md
+    ├── 2026-02-08_phase3-testing-plan.md
+    ├── 2026-02-08_phase4-testing-plan.md
+    ├── 2026-02-08_phase5-testing-plan.md
+    └── 2026-02-08_phase6-testing-plan.md
 ```
 
 ---
