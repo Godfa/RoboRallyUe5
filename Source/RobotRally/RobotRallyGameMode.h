@@ -34,6 +34,44 @@ struct FRobotCard
 	int32 Priority = 0;
 };
 
+USTRUCT(BlueprintType)
+struct FRobotProgram
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	ARobotPawn* Robot = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TArray<FRobotCard> HandCards;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TArray<int32> RegisterSlots;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TArray<FRobotCard> CommittedProgram;
+};
+
+USTRUCT(BlueprintType)
+struct FExecutionQueueEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	ARobotPawn* Robot = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	FRobotCard Card;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	int32 RegisterNumber = 0;
+
+	bool operator<(const FExecutionQueueEntry& Other) const
+	{
+		return Card.Priority > Other.Card.Priority;  // Higher priority first
+	}
+};
+
 UENUM(BlueprintType)
 enum class EGameState : uint8
 {
@@ -66,11 +104,20 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|TestScene")
 	AGridManager* GridManagerInstance;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|TestScene")
-	ARobotPawn* TestRobot;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Robots")
+	TArray<ARobotPawn*> Robots;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
-	TArray<FRobotCard> ProgrammedCards;
+	TArray<FRobotProgram> RobotPrograms;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Execution")
+	TArray<FExecutionQueueEntry> ExecutionQueue;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Execution")
+	int32 CurrentExecutionIndex = 0;
+
+	UPROPERTY()
+	TSet<ARobotPawn*> MovingRobots;
 
 	static constexpr int32 NUM_REGISTERS = 5;
 	static constexpr int32 DECK_SIZE = 84;
@@ -84,25 +131,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
 	TArray<FRobotCard> DiscardPile;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
-	TArray<FRobotCard> HandCards;
-
-	// Indices into HandCards for each register slot (-1 = empty)
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Cards")
-	TArray<int32> RegisterSlots;
-
 	// Card selection functions
 	UFUNCTION(BlueprintCallable, Category = "Game|Cards")
-	void SelectCardFromHand(int32 HandIndex);
+	void SelectCardFromHand(ARobotPawn* Robot, int32 HandIndex);
 
 	UFUNCTION(BlueprintCallable, Category = "Game|Cards")
 	void UndoLastSelection();
 
-	UFUNCTION(BlueprintCallable, Category = "Game|Cards")
-	bool AreAllRegistersFilled() const;
-
-	UFUNCTION(BlueprintCallable, Category = "Game|Cards")
-	bool IsCardInRegister(int32 HandIndex) const;
+	bool IsCardInRegister(const FRobotProgram* Program, int32 HandIndex) const;
 
 	static FString GetCardActionName(ECardAction Action);
 
@@ -120,19 +156,22 @@ public:
 	void ShowEventMessage(const FString& Text, FColor Color = FColor::White);
 
 private:
-	void ProcessNextRegister();
 	void SetupTestScene();
-	void ExecuteCardAction(ECardAction Action);
-	void CheckMovementComplete();
+	void ExecuteCardAction(ARobotPawn* Robot, ECardAction Action);
 
 	void BuildDeck();
 	void ShuffleDeck();
-	void DealHand();
-	void CommitRegistersToProgram();
+	void DealHandsToAllRobots();
+	void CommitAllRobotPrograms();
 	void DiscardHand();
-	int32 CalculateHandSize() const;
 
-	void ProcessConveyors();
+	void BuildExecutionQueue(int32 RegisterIndex);
+	void ProcessExecutionQueue();
+	void CheckParallelMovementComplete();
+	void ProcessAllRobotTileEffects();
+	void ProcessRobotTileEffects(ARobotPawn* Robot);
+	void ProcessAllConveyors();
+	void ProcessRobotConveyors(ARobotPawn* Robot);
 	void CheckWinLoseConditions();
 	void OnTileEffectsComplete();
 

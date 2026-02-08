@@ -148,7 +148,23 @@ void ARobotRallyHUD::DrawCardSelection()
 {
 	ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
 	if (!GM || GM->CurrentState != EGameState::Programming) return;
-	if (GM->HandCards.Num() == 0) return;
+
+	// Get player's robot (Robot[0])
+	if (!GM->Robots.IsValidIndex(0)) return;
+	ARobotPawn* PlayerRobot = GM->Robots[0];
+
+	// Find player's program
+	FRobotProgram* PlayerProgram = nullptr;
+	for (FRobotProgram& Program : GM->RobotPrograms)
+	{
+		if (Program.Robot == PlayerRobot)
+		{
+			PlayerProgram = &Program;
+			break;
+		}
+	}
+
+	if (!PlayerProgram || PlayerProgram->HandCards.Num() == 0) return;
 
 	UFont* Font = GEngine->GetLargeFont();
 	const float Padding = 10.0f;
@@ -158,7 +174,7 @@ void ARobotRallyHUD::DrawCardSelection()
 	float CurY = Padding;
 
 	// --- Panel background ---
-	float TotalHeight = SlotHeight * (ARobotRallyGameMode::NUM_REGISTERS + GM->HandCards.Num() + 4);
+	float TotalHeight = SlotHeight * (ARobotRallyGameMode::NUM_REGISTERS + PlayerProgram->HandCards.Num() + 4);
 	FCanvasTileItem PanelBG(
 		FVector2D(PanelX, CurY),
 		FVector2D(PanelWidth, TotalHeight),
@@ -169,8 +185,10 @@ void ARobotRallyHUD::DrawCardSelection()
 	float TextX = PanelX + Padding;
 
 	// --- Registers header ---
+	int32 PlayerRobotIndex = GM->Robots.Find(PlayerRobot);
+	FString HeaderText = FString::Printf(TEXT("ROBOT %d - PROGRAMMING"), PlayerRobotIndex);
 	FCanvasTextItem Header(FVector2D(TextX, CurY),
-		FText::FromString(TEXT("REGISTERS")), Font, FLinearColor(1.0f, 1.0f, 0.0f));
+		FText::FromString(HeaderText), Font, FLinearColor(1.0f, 1.0f, 0.0f));
 	Header.EnableShadow(FLinearColor::Black);
 	Canvas->DrawItem(Header);
 	CurY += SlotHeight;
@@ -179,7 +197,7 @@ void ARobotRallyHUD::DrawCardSelection()
 	int32 FilledCount = 0;
 	for (int32 i = 0; i < ARobotRallyGameMode::NUM_REGISTERS; ++i)
 	{
-		if (GM->RegisterSlots.IsValidIndex(i) && GM->RegisterSlots[i] != -1)
+		if (PlayerProgram->RegisterSlots.IsValidIndex(i) && PlayerProgram->RegisterSlots[i] != -1)
 			FilledCount++;
 	}
 
@@ -189,14 +207,14 @@ void ARobotRallyHUD::DrawCardSelection()
 		FString SlotText;
 		FLinearColor SlotColor;
 
-		bool bFilled = GM->RegisterSlots.IsValidIndex(i) && GM->RegisterSlots[i] != -1;
+		bool bFilled = PlayerProgram->RegisterSlots.IsValidIndex(i) && PlayerProgram->RegisterSlots[i] != -1;
 		if (bFilled)
 		{
-			int32 HandIdx = GM->RegisterSlots[i];
-			if (GM->HandCards.IsValidIndex(HandIdx))
+			int32 HandIdx = PlayerProgram->RegisterSlots[i];
+			if (PlayerProgram->HandCards.IsValidIndex(HandIdx))
 			{
-				FString CardName = ARobotRallyGameMode::GetCardActionName(GM->HandCards[HandIdx].Action);
-				SlotText = FString::Printf(TEXT("R%d: %s (P%d)"), i + 1, *CardName, GM->HandCards[HandIdx].Priority);
+				FString CardName = ARobotRallyGameMode::GetCardActionName(PlayerProgram->HandCards[HandIdx].Action);
+				SlotText = FString::Printf(TEXT("R%d: %s (P%d)"), i + 1, *CardName, PlayerProgram->HandCards[HandIdx].Priority);
 			}
 			else
 			{
@@ -231,21 +249,21 @@ void ARobotRallyHUD::DrawCardSelection()
 	CurY += SlotHeight;
 
 	// --- Hand cards ---
-	for (int32 i = 0; i < GM->HandCards.Num(); ++i)
+	for (int32 i = 0; i < PlayerProgram->HandCards.Num(); ++i)
 	{
-		FString CardName = ARobotRallyGameMode::GetCardActionName(GM->HandCards[i].Action);
-		bool bAssigned = GM->IsCardInRegister(i);
+		FString CardName = ARobotRallyGameMode::GetCardActionName(PlayerProgram->HandCards[i].Action);
+		bool bAssigned = GM->IsCardInRegister(PlayerProgram, i);
 
 		FString CardText;
 		FLinearColor CardColor;
 		if (bAssigned)
 		{
-			CardText = FString::Printf(TEXT("%d: %s (P%d) [R]"), i + 1, *CardName, GM->HandCards[i].Priority);
+			CardText = FString::Printf(TEXT("%d: %s (P%d) [R]"), i + 1, *CardName, PlayerProgram->HandCards[i].Priority);
 			CardColor = FLinearColor(0.4f, 0.4f, 0.4f); // Gray = already assigned
 		}
 		else
 		{
-			CardText = FString::Printf(TEXT("%d: %s (P%d)"), i + 1, *CardName, GM->HandCards[i].Priority);
+			CardText = FString::Printf(TEXT("%d: %s (P%d)"), i + 1, *CardName, PlayerProgram->HandCards[i].Priority);
 			CardColor = FLinearColor::White;
 		}
 
@@ -259,7 +277,7 @@ void ARobotRallyHUD::DrawCardSelection()
 	// --- Instructions ---
 	CurY += SlotHeight * 0.5f;
 	FString InstructionText;
-	if (GM->AreAllRegistersFilled())
+	if (FilledCount >= ARobotRallyGameMode::NUM_REGISTERS)
 	{
 		InstructionText = TEXT("Press E to execute!");
 	}

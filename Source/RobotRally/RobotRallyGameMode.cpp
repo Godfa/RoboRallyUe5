@@ -149,54 +149,81 @@ void ARobotRallyGameMode::SetupTestScene()
 		GridManagerInstance->SetTileType(FIntVector(6, 5, 0), LaserData);
 		GridManagerInstance->SetTileType(FIntVector(6, 6, 0), LaserData);
 
-		// Spawn robot at grid center (5, 5)
-		FVector SpawnLocation = GridManagerInstance->GridToWorld(FIntVector(5, 5, 0));
-		SpawnLocation.Z = 30.0f;
+		// Spawn 2 robots at different positions with different colors
+		TArray<FIntVector> SpawnPositions = {
+			FIntVector(1, 1, 0),  // Robot 0: Bottom-left
+			FIntVector(8, 8, 0)   // Robot 1: Top-right
+		};
+
+		TArray<FLinearColor> RobotColors = {
+			FLinearColor(0.2f, 0.5f, 0.9f),  // Blue (player)
+			FLinearColor(0.9f, 0.2f, 0.2f)   // Red (other robot)
+		};
+
+		Robots.Empty();
+		Robots.Reserve(2);
+		RobotPrograms.Empty();
+		RobotPrograms.Reserve(2);
 
 		FActorSpawnParameters RobotSpawnParams;
 		RobotSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-		TestRobot = World->SpawnActor<ARobotPawn>(
-			ARobotPawn::StaticClass(), SpawnLocation, FRotator::ZeroRotator, RobotSpawnParams);
-
-		if (TestRobot)
+		for (int32 i = 0; i < 2; ++i)
 		{
-			TestRobot->GridX = 5;
-			TestRobot->GridY = 5;
+			FIntVector SpawnGrid = SpawnPositions[i];
+			FVector SpawnLocation = GridManagerInstance->GridToWorld(SpawnGrid);
+			SpawnLocation.Z = 30.0f;
 
-			// Re-initialize movement component with correct grid position
-			if (TestRobot->RobotMovement)
+			ARobotPawn* NewRobot = World->SpawnActor<ARobotPawn>(
+				ARobotPawn::StaticClass(), SpawnLocation, FRotator::ZeroRotator, RobotSpawnParams);
+
+			if (NewRobot)
 			{
-				TestRobot->RobotMovement->InitializeGridPosition(5, 5, EGridDirection::North);
-			}
+				NewRobot->GridX = SpawnGrid.X;
+				NewRobot->GridY = SpawnGrid.Y;
+				NewRobot->BodyColor = RobotColors[i];
 
-			// Have Player 0 possess the robot
-			APlayerController* PC = World->GetFirstPlayerController();
-			if (PC)
-			{
-				PC->Possess(TestRobot);
-
-				// Spawn a top-down camera above the grid center
-				FVector CamGridCenter = GridManagerInstance->GridToWorld(FIntVector(
-					GridManagerInstance->Width / 2, GridManagerInstance->Height / 2, 0));
-				float CameraHeight = GridManagerInstance->Width * GridManagerInstance->TileSize * 1.2f;
-				FVector CamLocation(CamGridCenter.X, CamGridCenter.Y, CameraHeight);
-				FRotator CamRotation(-90.0f, 0.0f, 0.0f);
-
-				FActorSpawnParameters CamSpawnParams;
-				CamSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-				ACameraActor* TopDownCamera = World->SpawnActor<ACameraActor>(
-					ACameraActor::StaticClass(), CamLocation, CamRotation, CamSpawnParams);
-
-				if (TopDownCamera)
+				if (NewRobot->RobotMovement)
 				{
-					PC->SetViewTargetWithBlend(TopDownCamera, 0.0f);
+					NewRobot->RobotMovement->GridManager = GridManagerInstance;
+					NewRobot->RobotMovement->InitializeGridPosition(SpawnGrid.X, SpawnGrid.Y, EGridDirection::North);
 				}
+
+				Robots.Add(NewRobot);
+
+				// Initialize program for this robot
+				FRobotProgram& Program = RobotPrograms.AddDefaulted_GetRef();
+				Program.Robot = NewRobot;
+				Program.RegisterSlots.Init(-1, NUM_REGISTERS);
 			}
 		}
 
-		ShowEventMessage(TEXT("Robot ready at (5,5). WASD = move, 1-9 = select cards, E = execute"), FColor::Cyan);
+		// Player controls first robot (Robot[0])
+		APlayerController* PC = World->GetFirstPlayerController();
+		if (PC && Robots.IsValidIndex(0))
+		{
+			PC->Possess(Robots[0]);
+
+			// Spawn a top-down camera above the grid center
+			FVector CamGridCenter = GridManagerInstance->GridToWorld(FIntVector(
+				GridManagerInstance->Width / 2, GridManagerInstance->Height / 2, 0));
+			float CameraHeight = GridManagerInstance->Width * GridManagerInstance->TileSize * 1.2f;
+			FVector CamLocation(CamGridCenter.X, CamGridCenter.Y, CameraHeight);
+			FRotator CamRotation(-90.0f, 0.0f, 0.0f);
+
+			FActorSpawnParameters CamSpawnParams;
+			CamSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+			ACameraActor* TopDownCamera = World->SpawnActor<ACameraActor>(
+				ACameraActor::StaticClass(), CamLocation, CamRotation, CamSpawnParams);
+
+			if (TopDownCamera)
+			{
+				PC->SetViewTargetWithBlend(TopDownCamera, 0.0f);
+			}
+		}
+
+		ShowEventMessage(TEXT("2 Robots ready. Robot 0 (blue) at (1,1). WASD = move, 1-9 = select cards, E = execute"), FColor::Cyan);
 		StartProgrammingPhase();
 	});
 }
@@ -207,286 +234,337 @@ void ARobotRallyGameMode::StartProgrammingPhase()
 	CurrentRegister = 0;
 	GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
 	DiscardHand();
-	DealHand();
+	DealHandsToAllRobots();
 	ShowEventMessage(TEXT("Programming phase. Select 5 cards (1-9), then press E."), FColor::Cyan);
 }
 
 void ARobotRallyGameMode::StartExecutionPhase()
 {
-	if (!AreAllRegistersFilled())
+	// Check that player's robot (Robot 0) has filled their registers
+	// Other robots are optional (will be skipped if not programmed)
+	if (Robots.IsValidIndex(0) && Robots[0]->bIsAlive)
 	{
-		ShowEventMessage(TEXT("Fill all 5 registers before executing!"), FColor::Red);
-		return;
+		FRobotProgram* PlayerProgram = RobotPrograms.FindByPredicate([this](const FRobotProgram& P)
+		{
+			return P.Robot == Robots[0];
+		});
+
+		if (PlayerProgram)
+		{
+			int32 FilledCount = 0;
+			for (int32 Slot : PlayerProgram->RegisterSlots)
+			{
+				if (Slot != -1) FilledCount++;
+			}
+
+			if (FilledCount < NUM_REGISTERS)
+			{
+				ShowEventMessage(FString::Printf(TEXT("Robot 0 needs %d more cards!"),
+					NUM_REGISTERS - FilledCount), FColor::Red);
+				return;
+			}
+		}
 	}
+
 	CurrentState = EGameState::Executing;
+	CommitAllRobotPrograms();
+	DiscardHand();
+
 	CurrentRegister = 0;
-	CommitRegistersToProgram();
-	ShowEventMessage(TEXT("Executing cards..."), FColor::Cyan);
-	ProcessNextRegister();
+	BuildExecutionQueue(0);
+	ProcessExecutionQueue();
 }
 
-void ARobotRallyGameMode::ProcessNextRegister()
+void ARobotRallyGameMode::BuildExecutionQueue(int32 RegisterIndex)
 {
-	if (CurrentState == EGameState::GameOver)
+	ExecutionQueue.Empty();
+
+	// Collect cards from all robots for this register
+	for (FRobotProgram& Program : RobotPrograms)
 	{
+		if (!Program.Robot || !Program.Robot->bIsAlive) continue;
+		if (!Program.CommittedProgram.IsValidIndex(RegisterIndex)) continue;
+
+		FExecutionQueueEntry Entry;
+		Entry.Robot = Program.Robot;
+		Entry.Card = Program.CommittedProgram[RegisterIndex];
+		Entry.RegisterNumber = RegisterIndex;
+		ExecutionQueue.Add(Entry);
+	}
+
+	// Sort by priority (higher first)
+	ExecutionQueue.Sort();
+
+	CurrentExecutionIndex = 0;
+
+	UE_LOG(LogTemp, Log, TEXT("Built execution queue for register %d: %d entries"),
+		RegisterIndex, ExecutionQueue.Num());
+}
+
+void ARobotRallyGameMode::ProcessExecutionQueue()
+{
+	if (CurrentExecutionIndex >= ExecutionQueue.Num())
+	{
+		// All cards in this register executed
+		CurrentRegister++;
+
+		if (CurrentRegister >= NUM_REGISTERS)
+		{
+			ShowEventMessage(TEXT("All registers executed!"), FColor::Green);
+			StartProgrammingPhase();
+			return;
+		}
+
+		// Build queue for next register
+		BuildExecutionQueue(CurrentRegister);
+		ProcessExecutionQueue();
 		return;
 	}
 
-	if (!TestRobot || !TestRobot->bIsAlive)
+	// Get current priority level
+	int32 CurrentPriority = ExecutionQueue[CurrentExecutionIndex].Card.Priority;
+
+	// Execute all cards with same priority in parallel
+	MovingRobots.Empty();
+
+	while (CurrentExecutionIndex < ExecutionQueue.Num() &&
+	       ExecutionQueue[CurrentExecutionIndex].Card.Priority == CurrentPriority)
 	{
-		ShowEventMessage(TEXT("Robot is dead, stopping execution."), FColor::Red);
-		CurrentState = EGameState::GameOver;
-		return;
+		FExecutionQueueEntry& Entry = ExecutionQueue[CurrentExecutionIndex];
+
+		if (Entry.Robot && Entry.Robot->bIsAlive)
+		{
+			int32 RobotIndex = Robots.Find(Entry.Robot);
+			ShowEventMessage(FString::Printf(TEXT("R%d: %s (P%d)"),
+				RobotIndex, *GetCardActionName(Entry.Card.Action), Entry.Card.Priority),
+				FColor::White);
+
+			ExecuteCardAction(Entry.Robot, Entry.Card.Action);
+			MovingRobots.Add(Entry.Robot);
+		}
+
+		CurrentExecutionIndex++;
 	}
 
-	if (CurrentRegister >= NUM_REGISTERS)
-	{
-		ShowEventMessage(TEXT("All registers executed."), FColor::Green);
-		StartProgrammingPhase();
-		return;
-	}
-
-	if (!ProgrammedCards.IsValidIndex(CurrentRegister))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("No card at register %d"), CurrentRegister);
-		StartProgrammingPhase();
-		return;
-	}
-
-	FRobotCard Card = ProgrammedCards[CurrentRegister];
-
-	FString CardName = GetCardActionName(Card.Action);
-	ShowEventMessage(FString::Printf(TEXT("Register %d: %s (P%d)"), CurrentRegister + 1, *CardName, Card.Priority), FColor::White);
-
-	ExecuteCardAction(Card.Action);
-	CurrentRegister++;
-
-	// Start timer to check when movement completes
+	// Start timer to wait for all parallel movements to complete
 	GetWorld()->GetTimerManager().SetTimer(
 		MovementCheckTimerHandle,
 		this,
-		&ARobotRallyGameMode::CheckMovementComplete,
+		&ARobotRallyGameMode::CheckParallelMovementComplete,
 		0.1f,
 		true);
 }
 
-void ARobotRallyGameMode::ExecuteCardAction(ECardAction Action)
+void ARobotRallyGameMode::CheckParallelMovementComplete()
 {
-	if (!TestRobot)
+	// Remove robots that are no longer moving
+	for (auto It = MovingRobots.CreateIterator(); It; ++It)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("No TestRobot to execute card action"));
-		return;
+		ARobotPawn* Robot = *It;
+		if (!Robot || !Robot->RobotMovement) continue;
+
+		bool bStillMoving = Robot->RobotMovement->IsMoving() ||
+		                   Robot->RobotMovement->IsRotating();
+		if (!bStillMoving)
+		{
+			It.RemoveCurrent();
+		}
 	}
+
+	// All robots finished moving?
+	if (MovingRobots.Num() == 0)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
+		ProcessAllRobotTileEffects();
+	}
+}
+
+void ARobotRallyGameMode::ExecuteCardAction(ARobotPawn* Robot, ECardAction Action)
+{
+	if (!Robot || !Robot->bIsAlive) return;
 
 	switch (Action)
 	{
 	case ECardAction::Move1:
-		TestRobot->ExecuteMoveCommand(1);
+		Robot->ExecuteMoveCommand(1);
 		break;
 	case ECardAction::Move2:
-		TestRobot->ExecuteMoveCommand(2);
+		Robot->ExecuteMoveCommand(2);
 		break;
 	case ECardAction::Move3:
-		TestRobot->ExecuteMoveCommand(3);
+		Robot->ExecuteMoveCommand(3);
 		break;
 	case ECardAction::MoveBack:
-		TestRobot->ExecuteMoveCommand(-1);
+		Robot->ExecuteMoveCommand(-1);
 		break;
 	case ECardAction::RotateRight:
-		TestRobot->ExecuteRotateCommand(1);
+		Robot->ExecuteRotateCommand(1);
 		break;
 	case ECardAction::RotateLeft:
-		TestRobot->ExecuteRotateCommand(-1);
+		Robot->ExecuteRotateCommand(-1);
 		break;
 	case ECardAction::UTurn:
-		TestRobot->ExecuteRotateCommand(2);
+		Robot->ExecuteRotateCommand(2);
 		break;
-	}
-}
-
-void ARobotRallyGameMode::CheckMovementComplete()
-{
-	if (!TestRobot || !TestRobot->RobotMovement)
-	{
-		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
-		ProcessNextRegister();
-		return;
-	}
-
-	bool bStillMoving = TestRobot->RobotMovement->IsMoving() || TestRobot->RobotMovement->IsRotating();
-	if (!bStillMoving)
-	{
-		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
-		// After card movement completes, process tile effects
-		ProcessTileEffects();
 	}
 }
 
 void ARobotRallyGameMode::ProcessTileEffects()
 {
+	// Legacy function for manual WASD movement - process all robots
+	ProcessAllRobotTileEffects();
+}
+
+void ARobotRallyGameMode::ProcessAllRobotTileEffects()
+{
 	bProcessingTileEffects = true;
 
-	if (!TestRobot || !TestRobot->bIsAlive || !GridManagerInstance)
+	// Process tile effects for all robots
+	for (ARobotPawn* Robot : Robots)
 	{
-		OnTileEffectsComplete();
-		return;
+		if (Robot && Robot->bIsAlive)
+		{
+			ProcessRobotTileEffects(Robot);
+		}
 	}
 
-	FIntVector RobotCoords(TestRobot->GridX, TestRobot->GridY, 0);
-	FTileData TileData = GridManagerInstance->GetTileData(RobotCoords);
+	// Process conveyors
+	ProcessAllConveyors();
+}
+
+void ARobotRallyGameMode::ProcessRobotTileEffects(ARobotPawn* Robot)
+{
+	if (!Robot || !Robot->bIsAlive || !GridManagerInstance) return;
+
+	FIntVector CurrentPos(Robot->GridX, Robot->GridY, 0);
+	FTileData TileData = GridManagerInstance->GetTileData(CurrentPos);
+
+	int32 RobotIndex = Robots.Find(Robot);
 
 	switch (TileData.TileType)
 	{
 	case ETileType::Pit:
-		ShowEventMessage(FString::Printf(TEXT("Robot fell into a pit at (%d, %d)!"), RobotCoords.X, RobotCoords.Y), FColor::Red);
-		TestRobot->ApplyDamage(TestRobot->MaxHealth);
+		ShowEventMessage(FString::Printf(TEXT("R%d fell into pit!"), RobotIndex), FColor::Red);
+		Robot->ApplyDamage(Robot->MaxHealth);
 		break;
 
 	case ETileType::Laser:
-		ShowEventMessage(FString::Printf(TEXT("Laser hit! -1 HP at (%d, %d)"), RobotCoords.X, RobotCoords.Y), FColor::Orange);
-		TestRobot->ApplyDamage(1);
+		ShowEventMessage(FString::Printf(TEXT("R%d hit by laser (-1 HP)"), RobotIndex), FColor::Orange);
+		Robot->ApplyDamage(1);
 		break;
 
 	case ETileType::Checkpoint:
-		// ReachCheckpoint handles all messaging internally
-		TestRobot->ReachCheckpoint(TileData.CheckpointNumber);
+		Robot->ReachCheckpoint(TileData.CheckpointNumber);
 		break;
 
 	default:
 		break;
 	}
-
-	// Process conveyors after other effects
-	ProcessConveyors();
 }
 
-void ARobotRallyGameMode::ProcessConveyors()
+void ARobotRallyGameMode::ProcessAllConveyors()
 {
-	if (!TestRobot || !TestRobot->bIsAlive || !GridManagerInstance)
+	// Process conveyors for each robot separately
+	for (ARobotPawn* Robot : Robots)
 	{
-		OnTileEffectsComplete();
-		return;
+		if (!Robot || !Robot->bIsAlive) continue;
+
+		ProcessRobotConveyors(Robot);
 	}
 
-	FIntVector RobotCoords(TestRobot->GridX, TestRobot->GridY, 0);
-	ETileType TileType = GridManagerInstance->GetTileType(RobotCoords);
+	OnTileEffectsComplete();
+}
 
+void ARobotRallyGameMode::ProcessRobotConveyors(ARobotPawn* Robot)
+{
+	if (!Robot || !Robot->bIsAlive || !GridManagerInstance) return;
+
+	FIntVector CurrentPos(Robot->GridX, Robot->GridY, 0);
+	ETileType Type = GridManagerInstance->GetTileType(CurrentPos);
+
+	// Only move if currently on a conveyor
+	if (!AGridManager::IsConveyor(Type)) return;
+
+	// Calculate new position based on conveyor direction (move only ONE tile)
 	int32 DX = 0, DY = 0;
-	switch (TileType)
+	switch (Type)
 	{
-	case ETileType::ConveyorNorth: DX = 1;  DY = 0;  break;
-	case ETileType::ConveyorSouth: DX = -1; DY = 0;  break;
-	case ETileType::ConveyorEast:  DX = 0;  DY = 1;  break;
-	case ETileType::ConveyorWest:  DX = 0;  DY = -1; break;
-	default:
-		OnTileEffectsComplete();
-		return;
+	case ETileType::ConveyorNorth: DX = 1; break;
+	case ETileType::ConveyorSouth: DX = -1; break;
+	case ETileType::ConveyorEast: DY = 1; break;
+	case ETileType::ConveyorWest: DY = -1; break;
 	}
 
-	// Move robot one tile in conveyor direction (once per register)
-	int32 NewX = TestRobot->GridX + DX;
-	int32 NewY = TestRobot->GridY + DY;
+	FIntVector NewPos(CurrentPos.X + DX, CurrentPos.Y + DY, 0);
 
-	ShowEventMessage(FString::Printf(TEXT("Conveyor: (%d,%d) -> (%d,%d)"),
-		TestRobot->GridX, TestRobot->GridY, NewX, NewY), FColor::Cyan);
-
-	TestRobot->GridX = NewX;
-	TestRobot->GridY = NewY;
-
-	if (TestRobot->RobotMovement)
+	if (GridManagerInstance->IsValidTile(NewPos))
 	{
-		TestRobot->RobotMovement->SetGridPosition(NewX, NewY);
-		FVector NewWorldPos = GridManagerInstance->GridToWorld(FIntVector(NewX, NewY, 0));
-		TestRobot->RobotMovement->MoveToWorldPosition(NewWorldPos);
-	}
+		FVector NewWorldPos = GridManagerInstance->GridToWorld(NewPos);
+		Robot->RobotMovement->MoveToWorldPosition(NewWorldPos);
+		Robot->RobotMovement->SetGridPosition(NewPos.X, NewPos.Y);
 
-	// Wait for movement to complete, then check destination tile
-	GetWorld()->GetTimerManager().SetTimer(
-		TileEffectTimerHandle,
-		[this]()
+		int32 RobotIndex = Robots.Find(Robot);
+		ShowEventMessage(FString::Printf(TEXT("R%d moved by conveyor"), RobotIndex), FColor::Cyan);
+
+		// Check new tile for checkpoint
+		FTileData NewTile = GridManagerInstance->GetTileData(NewPos);
+		if (NewTile.TileType == ETileType::Checkpoint)
 		{
-			if (!TestRobot || !TestRobot->RobotMovement)
-			{
-				OnTileEffectsComplete();
-				return;
-			}
-			if (!TestRobot->RobotMovement->IsMoving())
-			{
-				GetWorld()->GetTimerManager().ClearTimer(TileEffectTimerHandle);
-
-				// Check for hazards on the destination tile
-				if (GridManagerInstance && TestRobot->bIsAlive)
-				{
-					FIntVector NewCoords(TestRobot->GridX, TestRobot->GridY, 0);
-					FTileData NewTile = GridManagerInstance->GetTileData(NewCoords);
-					if (NewTile.TileType == ETileType::Pit)
-					{
-						ShowEventMessage(TEXT("Conveyor pushed robot into pit!"), FColor::Red);
-						TestRobot->ApplyDamage(TestRobot->MaxHealth);
-					}
-					else if (NewTile.TileType == ETileType::Laser)
-					{
-						ShowEventMessage(TEXT("Conveyor pushed robot into laser! -1 HP"), FColor::Orange);
-						TestRobot->ApplyDamage(1);
-					}
-					else if (NewTile.TileType == ETileType::Checkpoint)
-					{
-						// ReachCheckpoint handles all messaging internally
-						TestRobot->ReachCheckpoint(NewTile.CheckpointNumber);
-					}
-				}
-
-				OnTileEffectsComplete();
-			}
-		},
-		0.1f,
-		true);
+			Robot->ReachCheckpoint(NewTile.CheckpointNumber);
+		}
+	}
 }
 
 void ARobotRallyGameMode::CheckWinLoseConditions()
 {
-	if (!TestRobot) return;
+	if (!GridManagerInstance) return;
 
-	if (!TestRobot->bIsAlive)
+	int32 TotalCheckpoints = GridManagerInstance->GetTotalCheckpoints();
+	int32 AliveRobots = 0;
+
+	for (int32 i = 0; i < Robots.Num(); ++i)
 	{
-		ShowEventMessage(TEXT("GAME OVER - Robot destroyed!"), FColor::Red);
-		CurrentState = EGameState::GameOver;
-		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
-		GetWorld()->GetTimerManager().ClearTimer(TileEffectTimerHandle);
-		return;
+		ARobotPawn* Robot = Robots[i];
+		if (!Robot) continue;
+
+		if (Robot->bIsAlive)
+		{
+			AliveRobots++;
+
+			// Win condition: first robot to collect all checkpoints wins
+			if (TotalCheckpoints > 0 && Robot->CurrentCheckpoint >= TotalCheckpoints)
+			{
+				ShowEventMessage(FString::Printf(TEXT("VICTORY! Robot %d collected all %d checkpoints!"),
+					i, TotalCheckpoints), FColor::Green);
+				CurrentState = EGameState::GameOver;
+				return;
+			}
+		}
 	}
 
-	if (GridManagerInstance)
+	// Lose condition: all robots destroyed
+	if (AliveRobots == 0)
 	{
-		int32 TotalCheckpoints = GridManagerInstance->GetTotalCheckpoints();
-		if (TotalCheckpoints > 0 && TestRobot->CurrentCheckpoint >= TotalCheckpoints)
-		{
-			ShowEventMessage(FString::Printf(TEXT("VICTORY! All %d checkpoints reached!"), TotalCheckpoints), FColor::Green);
-			CurrentState = EGameState::GameOver;
-			GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
-			GetWorld()->GetTimerManager().ClearTimer(TileEffectTimerHandle);
-			return;
-		}
+		ShowEventMessage(TEXT("GAME OVER - All robots destroyed!"), FColor::Red);
+		CurrentState = EGameState::GameOver;
 	}
 }
 
 void ARobotRallyGameMode::OnTileEffectsComplete()
 {
 	bProcessingTileEffects = false;
-
 	CheckWinLoseConditions();
 
 	if (CurrentState == EGameState::GameOver) return;
 
-	// Only continue register execution if in Executing phase
-	// (manual WASD moves also call ProcessTileEffects but shouldn't advance registers)
 	if (CurrentState == EGameState::Executing)
 	{
+		// Continue to next card after 0.3s delay
 		FTimerHandle DelayHandle;
 		GetWorld()->GetTimerManager().SetTimer(
 			DelayHandle,
 			this,
-			&ARobotRallyGameMode::ProcessNextRegister,
+			&ARobotRallyGameMode::ProcessExecutionQueue,
 			0.3f,
 			false);
 	}
@@ -507,18 +585,23 @@ void ARobotRallyGameMode::StartManualMoveTick()
 
 void ARobotRallyGameMode::CheckManualMoveComplete()
 {
-	if (!TestRobot || !TestRobot->RobotMovement)
+	// Check if any robot is still moving (for WASD manual movement)
+	bool bAnyMoving = false;
+	for (ARobotPawn* Robot : Robots)
 	{
-		GetWorld()->GetTimerManager().ClearTimer(ManualMoveTimerHandle);
-		bProcessingTileEffects = false;
-		return;
+		if (Robot && Robot->RobotMovement)
+		{
+			if (Robot->RobotMovement->IsMoving() || Robot->RobotMovement->IsRotating())
+			{
+				bAnyMoving = true;
+				break;
+			}
+		}
 	}
 
-	bool bStillMoving = TestRobot->RobotMovement->IsMoving() || TestRobot->RobotMovement->IsRotating();
-	if (!bStillMoving)
+	if (!bAnyMoving)
 	{
 		GetWorld()->GetTimerManager().ClearTimer(ManualMoveTimerHandle);
-		// Movement done — now process tile effects (which may start conveyor movement)
 		ProcessTileEffects();
 	}
 }
@@ -576,115 +659,177 @@ void ARobotRallyGameMode::ShuffleDeck()
 	}
 }
 
-int32 ARobotRallyGameMode::CalculateHandSize() const
+void ARobotRallyGameMode::DealHandsToAllRobots()
 {
-	if (!TestRobot) return BASE_HAND_SIZE;
-	int32 DamageTaken = TestRobot->MaxHealth - TestRobot->Health;
-	return FMath::Clamp(BASE_HAND_SIZE - DamageTaken, MIN_HAND_SIZE, BASE_HAND_SIZE);
-}
+	UE_LOG(LogTemp, Log, TEXT("DealHandsToAllRobots: %d programs"), RobotPrograms.Num());
 
-void ARobotRallyGameMode::DealHand()
-{
-	int32 HandSize = CalculateHandSize();
-	HandCards.Empty();
-	HandCards.Reserve(HandSize);
-
-	for (int32 i = 0; i < HandSize; ++i)
+	for (int32 ProgramIdx = 0; ProgramIdx < RobotPrograms.Num(); ++ProgramIdx)
 	{
-		// Reshuffle discard pile if deck is empty
-		if (Deck.Num() == 0)
+		FRobotProgram& Program = RobotPrograms[ProgramIdx];
+
+		if (!Program.Robot)
 		{
-			if (DiscardPile.Num() == 0)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("No cards left in deck or discard pile!"));
-				break;
-			}
-			Deck = MoveTemp(DiscardPile);
-			DiscardPile.Empty();
-			ShuffleDeck();
-			UE_LOG(LogTemp, Log, TEXT("Reshuffled discard pile into deck (%d cards)"), Deck.Num());
+			UE_LOG(LogTemp, Warning, TEXT("Program %d has no robot!"), ProgramIdx);
+			continue;
 		}
 
-		HandCards.Add(Deck.Pop());
+		if (!Program.Robot->bIsAlive)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Program %d robot is dead, skipping"), ProgramIdx);
+			continue;
+		}
+
+		// Hand size depends on robot damage
+		int32 Damage = Program.Robot->MaxHealth - Program.Robot->Health;
+		int32 LockedCards = FMath::Max(0, Damage - 4);  // 5+ damage locks cards
+		int32 HandSize = FMath::Clamp(BASE_HAND_SIZE - LockedCards, MIN_HAND_SIZE, BASE_HAND_SIZE);
+
+		Program.HandCards.Empty();
+		Program.HandCards.Reserve(HandSize);
+
+		for (int32 i = 0; i < HandSize; ++i)
+		{
+			// Reshuffle discard pile if deck is empty
+			if (Deck.Num() == 0)
+			{
+				if (DiscardPile.Num() == 0) break;
+				Deck = MoveTemp(DiscardPile);
+				DiscardPile.Empty();
+				ShuffleDeck();
+			}
+			Program.HandCards.Add(Deck.Pop());
+		}
+
+		Program.RegisterSlots.Init(-1, NUM_REGISTERS);
+
+		UE_LOG(LogTemp, Log, TEXT("Dealt %d cards to Robot %d"), Program.HandCards.Num(), ProgramIdx);
 	}
-
-	// Initialize register slots to empty
-	RegisterSlots.Init(-1, NUM_REGISTERS);
-
-	UE_LOG(LogTemp, Log, TEXT("Dealt %d cards (hand size: %d)"), HandCards.Num(), HandSize);
 }
 
-void ARobotRallyGameMode::SelectCardFromHand(int32 HandIndex)
+void ARobotRallyGameMode::SelectCardFromHand(ARobotPawn* Robot, int32 HandIndex)
 {
-	if (CurrentState != EGameState::Programming) return;
-	if (!HandCards.IsValidIndex(HandIndex)) return;
-	if (IsCardInRegister(HandIndex)) return;
+	UE_LOG(LogTemp, Log, TEXT("SelectCardFromHand called: Robot=%s, HandIndex=%d, State=%d"),
+		Robot ? *Robot->GetName() : TEXT("NULL"), HandIndex, (int32)CurrentState);
 
-	// Find first empty register slot
+	if (CurrentState != EGameState::Programming)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Not in Programming state!"));
+		return;
+	}
+
+	if (!Robot)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Robot is NULL!"));
+		return;
+	}
+
+	// Find this robot's program
+	FRobotProgram* Program = RobotPrograms.FindByPredicate([Robot](const FRobotProgram& P)
+	{
+		return P.Robot == Robot;
+	});
+
+	if (!Program)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Could not find program for robot %s! Total programs: %d"),
+			*Robot->GetName(), RobotPrograms.Num());
+		return;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("Found program with %d hand cards"), Program->HandCards.Num());
+
+	if (!Program->HandCards.IsValidIndex(HandIndex))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("HandIndex %d invalid (hand size: %d)"), HandIndex, Program->HandCards.Num());
+		return;
+	}
+
+	if (IsCardInRegister(Program, HandIndex))
+	{
+		UE_LOG(LogTemp, Log, TEXT("Card %d already in register"), HandIndex);
+		return;
+	}
+
+	// Find first empty register
 	for (int32 i = 0; i < NUM_REGISTERS; ++i)
 	{
-		if (RegisterSlots[i] == -1)
+		if (Program->RegisterSlots[i] == -1)
 		{
-			RegisterSlots[i] = HandIndex;
-			FString CardName = GetCardActionName(HandCards[HandIndex].Action);
-			ShowEventMessage(FString::Printf(TEXT("R%d: %s (P%d)"),
-				i + 1, *CardName, HandCards[HandIndex].Priority), FColor::Green);
+			Program->RegisterSlots[i] = HandIndex;
+
+			FRobotCard& Card = Program->HandCards[HandIndex];
+			ShowEventMessage(FString::Printf(TEXT("Robot %d: R%d = %s (P%d)"),
+				Robots.Find(Robot), i + 1,
+				*GetCardActionName(Card.Action), Card.Priority),
+				FColor::Green);
 			return;
 		}
 	}
-
-	ShowEventMessage(TEXT("All registers full! Press E to execute."), FColor::Yellow);
 }
 
 void ARobotRallyGameMode::UndoLastSelection()
 {
 	if (CurrentState != EGameState::Programming) return;
 
+	// Undo for the player's robot (first robot)
+	if (!Robots.IsValidIndex(0)) return;
+
+	FRobotProgram* Program = RobotPrograms.FindByPredicate([this](const FRobotProgram& P)
+	{
+		return P.Robot == Robots[0];
+	});
+
+	if (!Program) return;
+
 	// Find the last filled register and clear it
 	for (int32 i = NUM_REGISTERS - 1; i >= 0; --i)
 	{
-		if (RegisterSlots[i] != -1)
+		if (Program->RegisterSlots[i] != -1)
 		{
 			ShowEventMessage(FString::Printf(TEXT("Cleared R%d"), i + 1), FColor::Yellow);
-			RegisterSlots[i] = -1;
+			Program->RegisterSlots[i] = -1;
 			return;
 		}
 	}
 }
 
-bool ARobotRallyGameMode::AreAllRegistersFilled() const
+bool ARobotRallyGameMode::IsCardInRegister(const FRobotProgram* Program, int32 HandIndex) const
 {
-	if (RegisterSlots.Num() != NUM_REGISTERS) return false;
-	for (int32 Slot : RegisterSlots)
+	if (!Program) return false;
+	for (int32 Slot : Program->RegisterSlots)
 	{
-		if (Slot == -1) return false;
+		if (Slot == HandIndex) return true;
 	}
-	return true;
+	return false;
 }
 
-bool ARobotRallyGameMode::IsCardInRegister(int32 HandIndex) const
+void ARobotRallyGameMode::CommitAllRobotPrograms()
 {
-	return RegisterSlots.Contains(HandIndex);
-}
-
-void ARobotRallyGameMode::CommitRegistersToProgram()
-{
-	ProgrammedCards.Empty();
-	ProgrammedCards.Reserve(NUM_REGISTERS);
-
-	for (int32 i = 0; i < NUM_REGISTERS; ++i)
+	for (FRobotProgram& Program : RobotPrograms)
 	{
-		int32 HandIdx = RegisterSlots[i];
-		if (HandCards.IsValidIndex(HandIdx))
+		if (!Program.Robot || !Program.Robot->bIsAlive) continue;
+
+		Program.CommittedProgram.Empty();
+		Program.CommittedProgram.Reserve(NUM_REGISTERS);
+
+		for (int32 i = 0; i < NUM_REGISTERS; ++i)
 		{
-			ProgrammedCards.Add(HandCards[HandIdx]);
+			int32 HandIdx = Program.RegisterSlots[i];
+			if (Program.HandCards.IsValidIndex(HandIdx))
+			{
+				Program.CommittedProgram.Add(Program.HandCards[HandIdx]);
+			}
 		}
 	}
 }
 
 void ARobotRallyGameMode::DiscardHand()
 {
-	DiscardPile.Append(HandCards);
-	HandCards.Empty();
-	RegisterSlots.Empty();
+	// Discard all hands from all robot programs
+	for (FRobotProgram& Program : RobotPrograms)
+	{
+		DiscardPile.Append(Program.HandCards);
+		Program.HandCards.Empty();
+		Program.RegisterSlots.Empty();
+	}
 }

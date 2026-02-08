@@ -17,16 +17,36 @@ void ARobotController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Cache references
-	ControlledRobot = Cast<ARobotPawn>(GetPawn());
+	// Cache game mode reference
 	GameMode = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+
+	UE_LOG(LogTemp, Log, TEXT("RobotController::BeginPlay - GameMode: %s"),
+		GameMode ? TEXT("Valid") : TEXT("NULL"));
+}
+
+void ARobotController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+
+	// Update robot reference when possessed
+	ControlledRobot = Cast<ARobotPawn>(InPawn);
+
+	UE_LOG(LogTemp, Log, TEXT("RobotController::OnPossess - Pawn: %s"),
+		ControlledRobot ? *ControlledRobot->GetName() : TEXT("NULL"));
 }
 
 void ARobotController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	if (!InputComponent) return;
+	UE_LOG(LogTemp, Log, TEXT("RobotController::SetupInputComponent called - InputComponent: %s"),
+		InputComponent ? *InputComponent->GetClass()->GetName() : TEXT("NULL"));
+
+	if (!InputComponent)
+	{
+		UE_LOG(LogTemp, Error, TEXT("InputComponent is NULL!"));
+		return;
+	}
 
 	// Movement controls (WASD)
 	InputComponent->BindAction("MoveForward", IE_Pressed, this, &ARobotController::OnMoveForward);
@@ -48,11 +68,21 @@ void ARobotController::SetupInputComponent()
 	// Execution and undo
 	InputComponent->BindAction("ExecuteProgram", IE_Pressed, this, &ARobotController::OnExecuteProgram);
 	InputComponent->BindAction("UndoSelection", IE_Pressed, this, &ARobotController::OnUndoSelection);
+
+	UE_LOG(LogTemp, Log, TEXT("RobotController: All input bindings set up successfully"));
 }
 
 void ARobotController::OnMoveForward()
 {
-	if (!ControlledRobot || !GameMode) return;
+	UE_LOG(LogTemp, Log, TEXT("OnMoveForward called!"));
+
+	if (!ControlledRobot || !GameMode)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnMoveForward: ControlledRobot=%s, GameMode=%s"),
+			ControlledRobot ? TEXT("Valid") : TEXT("NULL"),
+			GameMode ? TEXT("Valid") : TEXT("NULL"));
+		return;
+	}
 	if (!ControlledRobot->bIsAlive) return;
 	if (GameMode->CurrentState != EGameState::Programming) return;
 	if (GameMode->bProcessingTileEffects) return;
@@ -122,10 +152,10 @@ void ARobotController::OnMoveRight()
 
 void ARobotController::SelectCard(int32 CardIndex)
 {
-	if (!GameMode) return;
+	if (!GameMode || !ControlledRobot) return;
 	if (GameMode->CurrentState != EGameState::Programming) return;
 
-	GameMode->SelectCardFromHand(CardIndex);
+	GameMode->SelectCardFromHand(ControlledRobot, CardIndex);
 }
 
 void ARobotController::OnSelectCard1() { SelectCard(0); }
