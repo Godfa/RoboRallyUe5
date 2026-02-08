@@ -2,17 +2,28 @@
 
 A digital implementation of the Robot Rally board game using Unreal Engine 5.7. Players program robots with movement cards and watch them execute commands on a grid-based game board.
 
+**Status**: Phase 3 Complete (Core gameplay functional) | [Technical Docs](docs/TECHNICAL_DOCUMENTATION.md) | [User Guide](docs/USER_GUIDE.md)
+
 ## Requirements
 
 - Unreal Engine 5.7
 - Visual Studio 2022 (MSVC 14.38 or 14.44)
 - Windows 10/11 SDK (22621)
 
-## Opening the Project
+## Quick Start
 
 1. Clone the repo to `H:\Repos\RoboRallyUe5` (or your preferred location)
 2. Double-click `RobotRally.uproject` to open the project in UE5 Editor
 3. The editor will compile the C++ module automatically
+4. Press **Play (Alt+P)** to start the game
+5. Use **1-9 keys** to select 5 cards, press **E** to execute
+6. See [User Guide](docs/USER_GUIDE.md) for detailed controls
+
+## Documentation
+
+- **[Technical Documentation](docs/TECHNICAL_DOCUMENTATION.md)** - Architecture, class reference, API docs
+- **[User Guide](docs/USER_GUIDE.md)** - Game rules, controls, tips & strategies
+- **[CLAUDE.md](CLAUDE.md)** - AI assistant project instructions
 
 ## Project Structure
 
@@ -20,10 +31,11 @@ A digital implementation of the Robot Rally board game using Unreal Engine 5.7. 
 Source/RobotRally/
   RobotRally.h/.cpp              Module registration
   RobotPawn.h/.cpp               Robot character (ACharacter)
+  RobotController.h/.cpp         Player input handling (WASD, cards)
   RobotMovementComponent.h/.cpp  Grid movement (interpolated)
   GridManager.h/.cpp             Game board (10x10 TMap grid)
-  RobotRallyGameMode.h/.cpp      Game state machine (FSM)
-  RobotRallyHUD.h/.cpp           On-screen HUD (health, events)
+  RobotRallyGameMode.h/.cpp      Game state machine, card deck
+  RobotRallyHUD.h/.cpp           On-screen HUD (health, events, cards)
 ```
 
 ## Game Mechanics
@@ -49,7 +61,7 @@ Source/RobotRally/
 | Pit | Robot is destroyed |
 | Conveyor (N/S/E/W) | Moves robot at end of turn |
 | Laser | Damages robot |
-| Checkpoint | Must be collected in order to win |
+| Checkpoint | Must be collected in sequential order to win (1→2→3...) |
 
 ## Architecture
 
@@ -92,15 +104,16 @@ ARobotRallyGameMode          Game state machine, turn logic
 - [x] `ARobotRallyGameMode` — State machine (Programming/Executing/GameOver), 5 registers
 - [x] `FRobotCard` — Card type (ECardAction) and priority
 - [x] Card execution system with test sequence
-- [ ] `UCardDataAsset` — Data-driven approach for cards
-- [ ] Card dealing and hand system (random cards to player)
-- [ ] Priority-based execution order between robots
+- [x] Card dealing and hand system (84-card deck, Fisher-Yates shuffle, hand size based on damage)
+- [x] Card selection (1-9 keys) and register programming
+- [ ] `UCardDataAsset` — Data-driven approach for cards (optional enhancement)
+- [ ] Priority-based execution order between robots (requires multi-robot support)
 
-### Phase 3: Player Control
-- [ ] `ARobotController` (APlayerController) — Mouse clicks and card inputs
+### Phase 3: Player Control — COMPLETE
+- [x] `ARobotController` (APlayerController) — Input handling for WASD movement and card selection
 - [x] Health system — Damage, death via `ApplyDamage()`, `OnDeath` delegate
 - [x] Checkpoint collection system (flags collected in order)
-- [ ] Robot lives and respawn
+- [x] Robot lives and respawn (3 lives, respawn at last checkpoint)
 
 ### Phase 4: Field Hazards & Environment — COMPLETE
 - [x] Conveyor belts — Move robot at end of register, chain support (max 10)
@@ -108,6 +121,7 @@ ARobotRallyGameMode          Game state machine, turn logic
 - [x] Pits — Robot destroyed when entering pit
 - [x] Tile effect processing after each card execution
 - [x] Win condition (all checkpoints) and lose condition (robot death)
+- [x] Checkpoint visual numbering (3D text labels visible from top-down view)
 - [ ] Collision checks between robots (pushing)
 
 ### Phase 5: UI & Interface
