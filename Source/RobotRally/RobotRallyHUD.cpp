@@ -101,9 +101,17 @@ void ARobotRallyHUD::DrawHUD()
 		HPText.EnableShadow(FLinearColor::Black);
 		Canvas->DrawItem(HPText);
 
+		// Lives display
+		FString LivesStr = FString::Printf(TEXT("Lives: %d"), Robot->Lives);
+		FLinearColor LivesColor = (Robot->Lives <= 1) ? FLinearColor(1.0f, 0.3f, 0.0f) : FLinearColor(0.3f, 1.0f, 0.3f);
+		FCanvasTextItem LivesText(FVector2D(BarX, BarY + BarHeight + 4),
+			FText::FromString(LivesStr), Font, LivesColor);
+		LivesText.EnableShadow(FLinearColor::Black);
+		Canvas->DrawItem(LivesText);
+
 		// Checkpoint progress
 		FString CheckpointStr = FString::Printf(TEXT("Checkpoint: %d"), Robot->CurrentCheckpoint);
-		FCanvasTextItem CPText(FVector2D(BarX, BarY + BarHeight + 4),
+		FCanvasTextItem CPText(FVector2D(BarX, BarY + BarHeight + 24),
 			FText::FromString(CheckpointStr), Font, FLinearColor::Yellow);
 		CPText.EnableShadow(FLinearColor::Black);
 		Canvas->DrawItem(CPText);
@@ -120,14 +128,14 @@ void ARobotRallyHUD::DrawHUD()
 			case EGameState::GameOver:    StateText = Robot->bIsAlive ? TEXT("VICTORY!") : TEXT("GAME OVER"); break;
 			}
 		}
-		FCanvasTextItem StateItem(FVector2D(BarX, BarY + BarHeight + 24),
+		FCanvasTextItem StateItem(FVector2D(BarX, BarY + BarHeight + 44),
 			FText::FromString(StateText), Font, FLinearColor(0.0f, 1.0f, 1.0f));
 		StateItem.EnableShadow(FLinearColor::Black);
 		Canvas->DrawItem(StateItem);
 
 		// Grid position
 		FString PosText = FString::Printf(TEXT("Position: (%d, %d)"), Robot->GridX, Robot->GridY);
-		FCanvasTextItem PosItem(FVector2D(BarX, BarY + BarHeight + 44),
+		FCanvasTextItem PosItem(FVector2D(BarX, BarY + BarHeight + 64),
 			FText::FromString(PosText), Font, FLinearColor(0.7f, 0.7f, 0.7f));
 		PosItem.EnableShadow(FLinearColor::Black);
 		Canvas->DrawItem(PosItem);

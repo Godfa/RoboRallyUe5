@@ -3,13 +3,13 @@
 #include "RobotPawn.h"
 #include "RobotMovementComponent.h"
 #include "RobotRallyGameMode.h"
+#include "GridManager.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "InputCoreTypes.h"
 
 #if WITH_EDITORONLY_DATA
 #include "Materials/Material.h"
@@ -88,6 +88,11 @@ void ARobotPawn::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Initialize lives and respawn point
+	Lives = MaxLives;
+	Health = MaxHealth;
+	RespawnPosition = FIntVector(GridX, GridY, 0);
+
 	// Apply custom meshes if set, otherwise keep engine defaults
 	if (BodyMeshAsset)
 	{
@@ -157,77 +162,7 @@ void ARobotPawn::BeginPlay()
 void ARobotPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	if (!bIsAlive) return;
-
-	// Simple keyboard input for testing
-	APlayerController* PC = Cast<APlayerController>(GetController());
-	if (!PC) return;
-
-	bool bCurrentlyMoving = RobotMovement && (RobotMovement->IsMoving() || RobotMovement->IsRotating());
-	if (bCurrentlyMoving) return;
-
-	ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
-
-	// Block input while tile effects (conveyors etc.) are processing
-	if (GM && GM->bProcessingTileEffects) return;
-
-	bool bDidMove = false;
-
-	if (PC->WasInputKeyJustPressed(EKeys::W))
-	{
-		ExecuteMoveCommand(1);
-		bDidMove = true;
-	}
-	else if (PC->WasInputKeyJustPressed(EKeys::S))
-	{
-		ExecuteMoveCommand(-1);
-		bDidMove = true;
-	}
-	else if (PC->WasInputKeyJustPressed(EKeys::D))
-	{
-		ExecuteRotateCommand(1);
-		bDidMove = true;
-	}
-	else if (PC->WasInputKeyJustPressed(EKeys::A))
-	{
-		ExecuteRotateCommand(-1);
-		bDidMove = true;
-	}
-	else if (PC->WasInputKeyJustPressed(EKeys::E))
-	{
-		if (GM && GM->CurrentState == EGameState::Programming)
-		{
-			GM->StartExecutionPhase();
-		}
-	}
-
-	// After WASD input, tell GameMode to poll for movement completion -> tile effects
-	if (bDidMove && GM && GM->CurrentState == EGameState::Programming)
-	{
-		GM->StartManualMoveTick();
-	}
-
-	// Card selection input (works even while moving)
-	if (GM && GM->CurrentState == EGameState::Programming)
-	{
-		static const FKey NumberKeys[] = {
-			EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five,
-			EKeys::Six, EKeys::Seven, EKeys::Eight, EKeys::Nine
-		};
-		for (int32 i = 0; i < 9; ++i)
-		{
-			if (PC->WasInputKeyJustPressed(NumberKeys[i]))
-			{
-				GM->SelectCardFromHand(i);
-				break;
-			}
-		}
-		if (PC->WasInputKeyJustPressed(EKeys::BackSpace))
-		{
-			GM->UndoLastSelection();
-		}
-	}
+	// Input is now handled by ARobotController
 }
 
 void ARobotPawn::ApplyDamage(int32 Amount)
@@ -239,19 +174,91 @@ void ARobotPawn::ApplyDamage(int32 Amount)
 
 	if (Health <= 0)
 	{
-		bIsAlive = false;
 		UE_LOG(LogTemp, Log, TEXT("Robot destroyed!"));
 		OnDeath.Broadcast();
+
+		// Attempt respawn
+		Lives--;
+		if (Lives > 0)
+		{
+			Respawn();
+		}
+		else
+		{
+			bIsAlive = false;
+			UE_LOG(LogTemp, Log, TEXT("Robot out of lives! Game Over."));
+		}
+	}
+}
+
+void ARobotPawn::Respawn()
+{
+	// Restore health
+	Health = MaxHealth;
+	bIsAlive = true;
+
+	// Teleport to respawn position
+	GridX = RespawnPosition.X;
+	GridY = RespawnPosition.Y;
+
+	if (RobotMovement && RobotMovement->GridManager)
+	{
+		FVector WorldPos = RobotMovement->GridManager->GridToWorld(RespawnPosition);
+		SetActorLocation(WorldPos);
+		RobotMovement->SetGridPosition(GridX, GridY);
+		UE_LOG(LogTemp, Log, TEXT("Robot respawned at (%d, %d) with %d lives remaining"), GridX, GridY, Lives);
+
+		// Notify game mode
+		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+		if (GM)
+		{
+			GM->ShowEventMessage(
+				FString::Printf(TEXT("Robot respawned at (%d, %d). Lives: %d"), GridX, GridY, Lives),
+				FColor::Orange);
+		}
 	}
 }
 
 void ARobotPawn::ReachCheckpoint(int32 Number)
 {
+	ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+
 	if (Number == CurrentCheckpoint + 1)
 	{
 		CurrentCheckpoint = Number;
-		UE_LOG(LogTemp, Log, TEXT("Checkpoint %d reached!"), Number);
+		// Update respawn point to this checkpoint
+		RespawnPosition = FIntVector(GridX, GridY, 0);
+		UE_LOG(LogTemp, Log, TEXT("Checkpoint %d reached! Respawn point updated."), Number);
 		OnCheckpointReached.Broadcast(Number);
+
+		if (GM)
+		{
+			GM->ShowEventMessage(
+				FString::Printf(TEXT("Checkpoint %d reached! (Respawn point updated)"), Number),
+				FColor::Green);
+		}
+	}
+	else if (Number > CurrentCheckpoint + 1)
+	{
+		// Wrong order - need to visit previous checkpoints first
+		UE_LOG(LogTemp, Warning, TEXT("Checkpoint %d reached out of order! Need checkpoint %d first."), Number, CurrentCheckpoint + 1);
+		if (GM)
+		{
+			GM->ShowEventMessage(
+				FString::Printf(TEXT("Wrong order! Need checkpoint %d first."), CurrentCheckpoint + 1),
+				FColor::Red);
+		}
+	}
+	else
+	{
+		// Already visited this checkpoint
+		UE_LOG(LogTemp, Log, TEXT("Checkpoint %d already visited (current: %d)."), Number, CurrentCheckpoint);
+		if (GM)
+		{
+			GM->ShowEventMessage(
+				FString::Printf(TEXT("Checkpoint %d already visited."), Number),
+				FColor::Yellow);
+		}
 	}
 }
 

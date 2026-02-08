@@ -69,8 +69,17 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
 	bool bIsAlive = true;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
+	int32 Lives = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Health")
+	int32 MaxLives = 3;
+
 	UFUNCTION(BlueprintCallable, Category = "Robot|Health")
 	void ApplyDamage(int32 Amount);
+
+	UFUNCTION(BlueprintCallable, Category = "Robot|Health")
+	void Respawn();
 
 	UPROPERTY(BlueprintAssignable, Category = "Robot|Health")
 	FOnRobotDeath OnDeath;
@@ -95,4 +104,7 @@ public:
 private:
 	UFUNCTION()
 	void OnGridPositionUpdated(int32 NewGridX, int32 NewGridY);
+
+	// Respawn location (last checkpoint or starting position)
+	FIntVector RespawnPosition = FIntVector(0, 0, 0);
 };

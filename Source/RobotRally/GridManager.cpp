@@ -186,6 +186,13 @@ void AGridManager::SetTileType(FIntVector Coords, const FTileData& Data)
 	{
 		SpawnConveyorArrow(Coords, Data.TileType);
 	}
+
+	// Handle checkpoint label
+	DestroyCheckpointLabel(Coords);
+	if (Data.TileType == ETileType::Checkpoint && Data.CheckpointNumber > 0)
+	{
+		SpawnCheckpointLabel(Coords, Data.CheckpointNumber);
+	}
 }
 
 void AGridManager::RefreshAllTileVisuals()
@@ -210,6 +217,16 @@ void AGridManager::RefreshAllTileVisuals()
 	}
 	ArrowMeshes.Empty();
 
+	// Destroy existing checkpoint labels
+	for (auto& Pair : CheckpointLabels)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->DestroyComponent();
+		}
+	}
+	CheckpointLabels.Empty();
+
 	// Spawn new meshes for all tiles
 	for (auto& Pair : GridMap)
 	{
@@ -217,6 +234,10 @@ void AGridManager::RefreshAllTileVisuals()
 		if (IsConveyor(Pair.Value.TileType))
 		{
 			SpawnConveyorArrow(Pair.Key, Pair.Value.TileType);
+		}
+		if (Pair.Value.TileType == ETileType::Checkpoint && Pair.Value.CheckpointNumber > 0)
+		{
+			SpawnCheckpointLabel(Pair.Key, Pair.Value.CheckpointNumber);
 		}
 	}
 
@@ -318,6 +339,45 @@ void AGridManager::DestroyConveyorArrow(FIntVector Coords)
 			(*Existing)->DestroyComponent();
 		}
 		ArrowMeshes.Remove(Coords);
+	}
+}
+
+void AGridManager::SpawnCheckpointLabel(FIntVector Coords, int32 CheckpointNumber)
+{
+	FString CompName = FString::Printf(TEXT("Checkpoint_%d_%d"), Coords.X, Coords.Y);
+	UTextRenderComponent* Label = NewObject<UTextRenderComponent>(this, FName(*CompName));
+	Label->SetupAttachment(RootComponent);
+
+	// Set the text to the checkpoint number
+	Label->SetText(FText::AsNumber(CheckpointNumber));
+
+	// Position above the tile
+	FVector LabelPos(Coords.X * TileSize, Coords.Y * TileSize, 10.0f);
+	Label->SetRelativeLocation(LabelPos);
+
+	// Rotate to face upward - Pitch 90 to lay flat, Roll 180 to flip right way up
+	Label->SetRelativeRotation(FRotator(90.0f, 0.0f, 180.0f));
+
+	// Configure appearance
+	Label->SetWorldSize(80.0f);
+	Label->SetTextRenderColor(FColor::White);
+	Label->SetHorizontalAlignment(EHorizTextAligment::EHTA_Center);
+	Label->SetVerticalAlignment(EVerticalTextAligment::EVRTA_TextCenter);
+
+	Label->RegisterComponent();
+
+	CheckpointLabels.Add(Coords, Label);
+}
+
+void AGridManager::DestroyCheckpointLabel(FIntVector Coords)
+{
+	if (UTextRenderComponent** Existing = CheckpointLabels.Find(Coords))
+	{
+		if (*Existing)
+		{
+			(*Existing)->DestroyComponent();
+		}
+		CheckpointLabels.Remove(Coords);
 	}
 }
 

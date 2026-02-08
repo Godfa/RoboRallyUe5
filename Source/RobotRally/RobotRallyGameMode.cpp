@@ -2,6 +2,7 @@
 
 #include "RobotRallyGameMode.h"
 #include "RobotRallyHUD.h"
+#include "RobotController.h"
 #include "GridManager.h"
 #include "RobotPawn.h"
 #include "RobotMovementComponent.h"
@@ -17,6 +18,7 @@ ARobotRallyGameMode::ARobotRallyGameMode()
 {
 	CurrentState = EGameState::Programming;
 	DefaultPawnClass = nullptr;
+	PlayerControllerClass = ARobotController::StaticClass();
 	HUDClass = ARobotRallyHUD::StaticClass();
 }
 
@@ -346,10 +348,7 @@ void ARobotRallyGameMode::ProcessTileEffects()
 		break;
 
 	case ETileType::Checkpoint:
-		if (TileData.CheckpointNumber == TestRobot->CurrentCheckpoint + 1)
-		{
-			ShowEventMessage(FString::Printf(TEXT("Checkpoint %d reached!"), TileData.CheckpointNumber), FColor::Yellow);
-		}
+		// ReachCheckpoint handles all messaging internally
 		TestRobot->ReachCheckpoint(TileData.CheckpointNumber);
 		break;
 
@@ -432,10 +431,7 @@ void ARobotRallyGameMode::ProcessConveyors()
 					}
 					else if (NewTile.TileType == ETileType::Checkpoint)
 					{
-						if (NewTile.CheckpointNumber == TestRobot->CurrentCheckpoint + 1)
-						{
-							ShowEventMessage(FString::Printf(TEXT("Checkpoint %d reached!"), NewTile.CheckpointNumber), FColor::Yellow);
-						}
+						// ReachCheckpoint handles all messaging internally
 						TestRobot->ReachCheckpoint(NewTile.CheckpointNumber);
 					}
 				}

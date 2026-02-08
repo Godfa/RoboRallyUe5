@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/TextRenderComponent.h"
 #include "GridManager.generated.h"
 
 UENUM(BlueprintType)
@@ -116,6 +117,8 @@ private:
 	void SpawnTileMesh(FIntVector Coords, const FTileData& Data);
 	void SpawnConveyorArrow(FIntVector Coords, ETileType Type);
 	void DestroyConveyorArrow(FIntVector Coords);
+	void SpawnCheckpointLabel(FIntVector Coords, int32 CheckpointNumber);
+	void DestroyCheckpointLabel(FIntVector Coords);
 	void CreateBaseMaterial();
 
 	UPROPERTY()
@@ -123,6 +126,9 @@ private:
 
 	UPROPERTY()
 	TMap<FIntVector, UStaticMeshComponent*> ArrowMeshes;
+
+	UPROPERTY()
+	TMap<FIntVector, UTextRenderComponent*> CheckpointLabels;
 
 	UPROPERTY()
 	USceneComponent* SceneRoot;
