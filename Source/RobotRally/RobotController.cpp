@@ -156,6 +156,27 @@ void ARobotController::SelectCard(int32 CardIndex)
 	if (GameMode->CurrentState != EGameState::Programming) return;
 
 	GameMode->SelectCardFromHand(ControlledRobot, CardIndex);
+
+	// Check if we just filled the 5th register
+	FRobotProgram* Program = GameMode->RobotPrograms.FindByPredicate([this](const FRobotProgram& P)
+	{
+		return P.Robot == ControlledRobot;
+	});
+
+	if (Program)
+	{
+		int32 FilledCount = 0;
+		for (int32 Slot : Program->RegisterSlots)
+		{
+			if (Slot != -1) FilledCount++;
+		}
+
+		// Signal ready when all 5 registers are filled
+		if (FilledCount == ARobotRallyGameMode::NUM_REGISTERS)
+		{
+			GameMode->OnControllerReady(this);
+		}
+	}
 }
 
 void ARobotController::OnSelectCard1() { SelectCard(0); }

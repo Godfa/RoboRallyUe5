@@ -3,6 +3,7 @@
 #include "RobotRallyGameMode.h"
 #include "RobotRallyHUD.h"
 #include "RobotController.h"
+#include "RobotAIController.h"
 #include "GridManager.h"
 #include "RobotPawn.h"
 #include "RobotMovementComponent.h"
@@ -149,81 +150,8 @@ void ARobotRallyGameMode::SetupTestScene()
 		GridManagerInstance->SetTileType(FIntVector(6, 5, 0), LaserData);
 		GridManagerInstance->SetTileType(FIntVector(6, 6, 0), LaserData);
 
-		// Spawn 2 robots at different positions with different colors
-		TArray<FIntVector> SpawnPositions = {
-			FIntVector(1, 1, 0),  // Robot 0: Bottom-left
-			FIntVector(8, 8, 0)   // Robot 1: Top-right
-		};
-
-		TArray<FLinearColor> RobotColors = {
-			FLinearColor(0.2f, 0.5f, 0.9f),  // Blue (player)
-			FLinearColor(0.9f, 0.2f, 0.2f)   // Red (other robot)
-		};
-
-		Robots.Empty();
-		Robots.Reserve(2);
-		RobotPrograms.Empty();
-		RobotPrograms.Reserve(2);
-
-		FActorSpawnParameters RobotSpawnParams;
-		RobotSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		for (int32 i = 0; i < 2; ++i)
-		{
-			FIntVector SpawnGrid = SpawnPositions[i];
-			FVector SpawnLocation = GridManagerInstance->GridToWorld(SpawnGrid);
-			SpawnLocation.Z = 30.0f;
-
-			ARobotPawn* NewRobot = World->SpawnActor<ARobotPawn>(
-				ARobotPawn::StaticClass(), SpawnLocation, FRotator::ZeroRotator, RobotSpawnParams);
-
-			if (NewRobot)
-			{
-				NewRobot->GridX = SpawnGrid.X;
-				NewRobot->GridY = SpawnGrid.Y;
-				NewRobot->BodyColor = RobotColors[i];
-
-				if (NewRobot->RobotMovement)
-				{
-					NewRobot->RobotMovement->GridManager = GridManagerInstance;
-					NewRobot->RobotMovement->InitializeGridPosition(SpawnGrid.X, SpawnGrid.Y, EGridDirection::North);
-				}
-
-				Robots.Add(NewRobot);
-
-				// Initialize program for this robot
-				FRobotProgram& Program = RobotPrograms.AddDefaulted_GetRef();
-				Program.Robot = NewRobot;
-				Program.RegisterSlots.Init(-1, NUM_REGISTERS);
-			}
-		}
-
-		// Player controls first robot (Robot[0])
-		APlayerController* PC = World->GetFirstPlayerController();
-		if (PC && Robots.IsValidIndex(0))
-		{
-			PC->Possess(Robots[0]);
-
-			// Spawn a top-down camera above the grid center
-			FVector CamGridCenter = GridManagerInstance->GridToWorld(FIntVector(
-				GridManagerInstance->Width / 2, GridManagerInstance->Height / 2, 0));
-			float CameraHeight = GridManagerInstance->Width * GridManagerInstance->TileSize * 1.2f;
-			FVector CamLocation(CamGridCenter.X, CamGridCenter.Y, CameraHeight);
-			FRotator CamRotation(-90.0f, 0.0f, 0.0f);
-
-			FActorSpawnParameters CamSpawnParams;
-			CamSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-			ACameraActor* TopDownCamera = World->SpawnActor<ACameraActor>(
-				ACameraActor::StaticClass(), CamLocation, CamRotation, CamSpawnParams);
-
-			if (TopDownCamera)
-			{
-				PC->SetViewTargetWithBlend(TopDownCamera, 0.0f);
-			}
-		}
-
-		ShowEventMessage(TEXT("2 Robots ready. Robot 0 (blue) at (1,1). WASD = move, 1-9 = select cards, E = execute"), FColor::Cyan);
+		// Spawn robots with controllers using the new spawn system
+		SpawnRobotsWithControllers();
 		StartProgrammingPhase();
 	});
 }
@@ -235,6 +163,22 @@ void ARobotRallyGameMode::StartProgrammingPhase()
 	GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
 	DiscardHand();
 	DealHandsToAllRobots();
+
+	// Reset ready tracking
+	ReadyControllers.Empty();
+
+	// Notify all AI controllers to start thinking
+	for (ARobotPawn* Robot : Robots)
+	{
+		if (!Robot || !Robot->bIsAlive) continue;
+
+		AController* Controller = Robot->GetController();
+		if (ARobotAIController* AIController = Cast<ARobotAIController>(Controller))
+		{
+			AIController->StartCardSelection();
+		}
+	}
+
 	ShowEventMessage(TEXT("Programming phase. Select 5 cards (1-9), then press E."), FColor::Cyan);
 }
 
@@ -831,5 +775,204 @@ void ARobotRallyGameMode::DiscardHand()
 		DiscardPile.Append(Program.HandCards);
 		Program.HandCards.Empty();
 		Program.RegisterSlots.Empty();
+	}
+}
+
+TSubclassOf<AController> ARobotRallyGameMode::GetControllerClassForType(ERobotControllerType Type)
+{
+	switch (Type)
+	{
+	case ERobotControllerType::Player:
+		return ARobotController::StaticClass();
+	case ERobotControllerType::AI_Easy:
+	case ERobotControllerType::AI_Medium:
+	case ERobotControllerType::AI_Hard:
+		return ARobotAIController::StaticClass();
+	default:
+		return ARobotController::StaticClass();
+	}
+}
+
+void ARobotRallyGameMode::SpawnRobotsWithControllers()
+{
+	if (!GridManagerInstance)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnRobotsWithControllers: GridManagerInstance is NULL!"));
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	Robots.Empty();
+	RobotPrograms.Empty();
+
+	// Use configured spawn configs if available, otherwise use fallback
+	TArray<FRobotSpawnData> SpawnConfigs = RobotSpawnConfigs;
+	if (SpawnConfigs.Num() == 0)
+	{
+		// Fallback default config for testing
+		FRobotSpawnData PlayerConfig;
+		PlayerConfig.StartPosition = FIntVector(1, 1, 0);
+		PlayerConfig.StartFacing = EGridDirection::North;
+		PlayerConfig.ControllerType = ERobotControllerType::Player;
+		PlayerConfig.BodyColor = FLinearColor(0.2f, 0.5f, 0.9f);  // Blue
+
+		FRobotSpawnData AIConfig;
+		AIConfig.StartPosition = FIntVector(8, 8, 0);
+		AIConfig.StartFacing = EGridDirection::North;
+		AIConfig.ControllerType = ERobotControllerType::AI_Medium;
+		AIConfig.BodyColor = FLinearColor(0.9f, 0.2f, 0.2f);  // Red
+
+		SpawnConfigs.Add(PlayerConfig);
+		SpawnConfigs.Add(AIConfig);
+	}
+
+	int32 NumRobotsToSpawn = SpawnConfigs.Num();
+	Robots.Reserve(NumRobotsToSpawn);
+	RobotPrograms.Reserve(NumRobotsToSpawn);
+
+	FActorSpawnParameters RobotSpawnParams;
+	RobotSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	for (int32 i = 0; i < NumRobotsToSpawn; ++i)
+	{
+		const FRobotSpawnData& Config = SpawnConfigs[i];
+
+		// Spawn robot pawn
+		FIntVector SpawnGrid = Config.StartPosition;
+		FVector SpawnLocation = GridManagerInstance->GridToWorld(SpawnGrid);
+		SpawnLocation.Z = 30.0f;
+
+		ARobotPawn* NewRobot = World->SpawnActor<ARobotPawn>(
+			ARobotPawn::StaticClass(), SpawnLocation, FRotator::ZeroRotator, RobotSpawnParams);
+
+		if (NewRobot)
+		{
+			NewRobot->GridX = SpawnGrid.X;
+			NewRobot->GridY = SpawnGrid.Y;
+			NewRobot->BodyColor = Config.BodyColor;
+
+			if (NewRobot->RobotMovement)
+			{
+				NewRobot->RobotMovement->GridManager = GridManagerInstance;
+				NewRobot->RobotMovement->InitializeGridPosition(SpawnGrid.X, SpawnGrid.Y, Config.StartFacing);
+			}
+
+			// Assign controller
+			if (Config.ControllerType == ERobotControllerType::Player)
+			{
+				// Use the existing auto-created PlayerController instead of spawning a new one
+				APlayerController* PC = World->GetFirstPlayerController();
+				if (PC)
+				{
+					PC->Possess(NewRobot);
+
+					// Spawn a top-down camera above the grid center
+					FVector CamGridCenter = GridManagerInstance->GridToWorld(FIntVector(
+						GridManagerInstance->Width / 2, GridManagerInstance->Height / 2, 0));
+					float CameraHeight = GridManagerInstance->Width * GridManagerInstance->TileSize * 1.2f;
+					FVector CamLocation(CamGridCenter.X, CamGridCenter.Y, CameraHeight);
+					FRotator CamRotation(-90.0f, 0.0f, 0.0f);
+
+					FActorSpawnParameters CamSpawnParams;
+					CamSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+					ACameraActor* TopDownCamera = World->SpawnActor<ACameraActor>(
+						ACameraActor::StaticClass(), CamLocation, CamRotation, CamSpawnParams);
+
+					if (TopDownCamera)
+					{
+						PC->SetViewTargetWithBlend(TopDownCamera, 0.0f);
+					}
+				}
+			}
+			else
+			{
+				// Spawn AI controller
+				TSubclassOf<AController> ControllerClass = GetControllerClassForType(Config.ControllerType);
+				if (ControllerClass)
+				{
+					AController* NewController = World->SpawnActor<AController>(
+						ControllerClass, FVector::ZeroVector, FRotator::ZeroRotator, RobotSpawnParams);
+
+					if (NewController)
+					{
+						if (ARobotAIController* AICtrl = Cast<ARobotAIController>(NewController))
+						{
+							AICtrl->DifficultyLevel = Config.ControllerType;
+						}
+
+						NewController->Possess(NewRobot);
+					}
+				}
+			}
+
+			Robots.Add(NewRobot);
+
+			// Initialize program for this robot
+			FRobotProgram& Program = RobotPrograms.AddDefaulted_GetRef();
+			Program.Robot = NewRobot;
+			Program.RegisterSlots.Init(-1, NUM_REGISTERS);
+
+			UE_LOG(LogTemp, Log, TEXT("Spawned Robot %d at (%d,%d) with controller type %d"),
+				i, SpawnGrid.X, SpawnGrid.Y, (int32)Config.ControllerType);
+		}
+	}
+
+	FString Message = FString::Printf(TEXT("%d Robots ready. "), Robots.Num());
+	if (Robots.Num() >= 2)
+	{
+		Message += FString::Printf(TEXT("Robot 0 (%s) at (%d,%d). Robot 1 (%s) at (%d,%d). WASD = move, 1-9 = select cards"),
+			SpawnConfigs[0].ControllerType == ERobotControllerType::Player ? TEXT("Player") : TEXT("AI"),
+			SpawnConfigs[0].StartPosition.X, SpawnConfigs[0].StartPosition.Y,
+			SpawnConfigs[1].ControllerType == ERobotControllerType::Player ? TEXT("Player") : TEXT("AI"),
+			SpawnConfigs[1].StartPosition.X, SpawnConfigs[1].StartPosition.Y);
+	}
+	ShowEventMessage(Message, FColor::Cyan);
+}
+
+bool ARobotRallyGameMode::AreAllRobotsReady() const
+{
+	for (ARobotPawn* Robot : Robots)
+	{
+		if (!Robot || !Robot->bIsAlive) continue;
+
+		AController* Controller = Robot->GetController();
+		if (!Controller) continue;
+
+		if (!ReadyControllers.Contains(Controller))
+			return false;
+	}
+	return true;
+}
+
+void ARobotRallyGameMode::OnControllerReady(AController* Controller)
+{
+	if (!Controller) return;
+
+	ReadyControllers.Add(Controller);
+
+	int32 RobotIndex = -1;
+	ARobotPawn* ControlledRobot = Cast<ARobotPawn>(Controller->GetPawn());
+	if (ControlledRobot)
+	{
+		RobotIndex = Robots.Find(ControlledRobot);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("Controller %d ready. Total ready: %d/%d"),
+		RobotIndex, ReadyControllers.Num(), Robots.Num());
+
+	// Check if all alive robots' controllers are ready
+	if (AreAllRobotsReady())
+	{
+		ShowEventMessage(TEXT("All robots programmed. Starting execution..."), FColor::Green);
+
+		// Small delay for visual feedback
+		FTimerHandle DelayHandle;
+		GetWorld()->GetTimerManager().SetTimer(DelayHandle, [this]()
+		{
+			StartExecutionPhase();
+		}, 0.5f, false);
 	}
 }

@@ -4,11 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "RobotMovementComponent.h"
 #include "RobotRallyGameMode.generated.h"
 
 class AGridManager;
 class ARobotPawn;
 class ARobotRallyHUD;
+class AController;
+class ARobotAIController;
 
 UENUM(BlueprintType)
 enum class ECardAction : uint8
@@ -80,6 +83,33 @@ enum class EGameState : uint8
 	GameOver
 };
 
+UENUM(BlueprintType)
+enum class ERobotControllerType : uint8
+{
+	Player,    // Human keyboard control
+	AI_Easy,   // Random + safety checks
+	AI_Medium, // Pathfinding + hazard avoidance
+	AI_Hard    // Advanced prediction (future)
+};
+
+USTRUCT(BlueprintType)
+struct FRobotSpawnData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game|Setup")
+	FIntVector StartPosition = FIntVector(0, 0, 0);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game|Setup")
+	EGridDirection StartFacing = EGridDirection::North;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game|Setup")
+	ERobotControllerType ControllerType = ERobotControllerType::Player;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game|Setup")
+	FLinearColor BodyColor = FLinearColor::White;
+};
+
 UCLASS()
 class ROBOTRALLY_API ARobotRallyGameMode : public AGameModeBase
 {
@@ -103,6 +133,10 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|TestScene")
 	AGridManager* GridManagerInstance;
+
+	// Robot spawning configuration
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Game|Setup")
+	TArray<FRobotSpawnData> RobotSpawnConfigs;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game|Robots")
 	TArray<ARobotPawn*> Robots;
@@ -155,6 +189,10 @@ public:
 	// Push a message to the on-screen event log
 	void ShowEventMessage(const FString& Text, FColor Color = FColor::White);
 
+	// AI controller ready tracking - public so controllers can signal when ready
+	UFUNCTION(BlueprintCallable, Category = "Game")
+	void OnControllerReady(AController* Controller);
+
 private:
 	void SetupTestScene();
 	void ExecuteCardAction(ARobotPawn* Robot, ECardAction Action);
@@ -174,6 +212,12 @@ private:
 	void ProcessRobotConveyors(ARobotPawn* Robot);
 	void CheckWinLoseConditions();
 	void OnTileEffectsComplete();
+
+	// AI controller tracking
+	TSet<AController*> ReadyControllers;
+	bool AreAllRobotsReady() const;
+	void SpawnRobotsWithControllers();
+	TSubclassOf<AController> GetControllerClassForType(ERobotControllerType Type);
 
 	int32 CurrentRegister = 0;
 	FTimerHandle MovementCheckTimerHandle;
