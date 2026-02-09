@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Net/UnrealNetwork.h"
 #include "RobotPawn.generated.h"
 
 class URobotMovementComponent;
@@ -19,6 +20,8 @@ class ROBOTRALLY_API ARobotPawn : public ACharacter
 
 public:
 	ARobotPawn();
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -45,7 +48,7 @@ public:
 	UStaticMesh* DirectionMeshAsset;
 
 	// Robot body color
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Robot|Visual|Meshes")
+	UPROPERTY(Replicated, EditDefaultsOnly, BlueprintReadWrite, Category = "Robot|Visual|Meshes")
 	FLinearColor BodyColor = FLinearColor(0.2f, 0.5f, 0.9f);
 
 	// Direction indicator color
@@ -53,23 +56,23 @@ public:
 	FLinearColor DirectionColor = FLinearColor(0.9f, 0.8f, 0.1f);
 
 	// Grid coordinates
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Grid")
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Robot|Grid")
 	int32 GridX;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Grid")
+	UPROPERTY(Replicated, EditAnywhere, BlueprintReadWrite, Category = "Robot|Grid")
 	int32 GridY;
 
 	// Health system
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
+	UPROPERTY(ReplicatedUsing = OnRep_Health, VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
 	int32 Health = 10;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Health")
 	int32 MaxHealth = 10;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
 	bool bIsAlive = true;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Health")
 	int32 Lives = 3;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Robot|Health")
@@ -85,7 +88,7 @@ public:
 	FOnRobotDeath OnDeath;
 
 	// Checkpoint progress
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Checkpoint")
+	UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Robot|Checkpoint")
 	int32 CurrentCheckpoint = 0;
 
 	UFUNCTION(BlueprintCallable, Category = "Robot|Checkpoint")
@@ -102,6 +105,9 @@ public:
 	void ExecuteRotateCommand(int32 Steps); // 1 = 90 deg right, -1 = 90 deg left
 
 private:
+	UFUNCTION()
+	void OnRep_Health();
+
 	UFUNCTION()
 	void OnGridPositionUpdated(int32 NewGridX, int32 NewGridY);
 

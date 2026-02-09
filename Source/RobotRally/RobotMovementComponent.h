@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "RobotMovementComponent.generated.h"
 
 class AGridManager;
@@ -26,6 +27,8 @@ class ROBOTRALLY_API URobotMovementComponent : public UActorComponent
 
 public:
 	URobotMovementComponent();
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -82,7 +85,20 @@ public:
 	// Returns (DX, DY) delta for a given direction
 	static void GetDirectionDelta(EGridDirection Dir, int32& OutDX, int32& OutDY);
 
+	// Replicated targets for client interpolation
+	UPROPERTY(ReplicatedUsing = OnRep_TargetLocation)
+	FVector Rep_TargetLocation;
+
+	UPROPERTY(ReplicatedUsing = OnRep_TargetRotation)
+	FRotator Rep_TargetRotation;
+
 private:
+	UFUNCTION()
+	void OnRep_TargetLocation();
+
+	UFUNCTION()
+	void OnRep_TargetRotation();
+
 	FVector TargetLocation;
 	FRotator TargetRotation;
 

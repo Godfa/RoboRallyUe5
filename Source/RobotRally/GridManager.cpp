@@ -12,6 +12,8 @@
 AGridManager::AGridManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
+	bReplicates = true;
+	bAlwaysRelevant = true;
 	Width = 10;
 	Height = 10;
 	TileSize = 100.0f;

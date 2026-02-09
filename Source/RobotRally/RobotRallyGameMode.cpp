@@ -2,6 +2,9 @@
 
 #include "RobotRallyGameMode.h"
 #include "RobotRallyHUD.h"
+#include "RobotRallyGameState.h"
+#include "RobotRallyPlayerState.h"
+#include "RobotRallyGameInstance.h"
 #include "RobotController.h"
 #include "RobotAIController.h"
 #include "GridManager.h"
@@ -21,21 +24,162 @@ ARobotRallyGameMode::ARobotRallyGameMode()
 	DefaultPawnClass = nullptr;
 	PlayerControllerClass = ARobotController::StaticClass();
 	HUDClass = ARobotRallyHUD::StaticClass();
+	GameStateClass = ARobotRallyGameState::StaticClass();
+	PlayerStateClass = ARobotRallyPlayerState::StaticClass();
 }
 
 void ARobotRallyGameMode::ShowEventMessage(const FString& Text, FColor Color)
 {
+	BroadcastEventMessage(Text, Color);
+}
+
+void ARobotRallyGameMode::BroadcastEventMessage(const FString& Text, FColor Color)
+{
 	UE_LOG(LogTemp, Log, TEXT("%s"), *Text);
 
-	APlayerController* PC = GetWorld()->GetFirstPlayerController();
-	if (PC)
+	if (GetNetMode() == NM_Standalone)
 	{
-		ARobotRallyHUD* HUD = Cast<ARobotRallyHUD>(PC->GetHUD());
-		if (HUD)
+		// Standalone: directly add to local HUD
+		APlayerController* PC = GetWorld()->GetFirstPlayerController();
+		if (PC)
 		{
-			HUD->AddEventMessage(Text, Color);
+			ARobotRallyHUD* HUD = Cast<ARobotRallyHUD>(PC->GetHUD());
+			if (HUD)
+			{
+				HUD->AddEventMessage(Text, Color);
+			}
 		}
 	}
+	else
+	{
+		// Network: use GameState multicast RPC
+		ARobotRallyGameState* GS = GetGameState<ARobotRallyGameState>();
+		if (GS)
+		{
+			GS->MulticastShowEventMessage(Text, Color);
+		}
+	}
+}
+
+void ARobotRallyGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+
+	UE_LOG(LogTemp, Log, TEXT("PostLogin: Player %s connected"), *NewPlayer->GetName());
+
+	// In network mode, assign the connecting player to an uncontrolled robot
+	if (GetNetMode() != NM_Standalone)
+	{
+		AssignRobotToPlayer(NewPlayer);
+	}
+}
+
+void ARobotRallyGameMode::Logout(AController* Exiting)
+{
+	UE_LOG(LogTemp, Log, TEXT("Logout: Controller %s disconnected"), *Exiting->GetName());
+
+	// Unpossess the robot so it can be reassigned
+	if (APawn* Pawn = Exiting->GetPawn())
+	{
+		Exiting->UnPossess();
+	}
+
+	Super::Logout(Exiting);
+}
+
+void ARobotRallyGameMode::AssignRobotToPlayer(APlayerController* NewPlayer)
+{
+	if (!NewPlayer) return;
+
+	// Find an uncontrolled Player-type robot
+	for (int32 i = 0; i < Robots.Num(); ++i)
+	{
+		ARobotPawn* Robot = Robots[i];
+		if (!Robot || !Robot->bIsAlive) continue;
+
+		// Check if this robot is already controlled by a PlayerController
+		AController* CurrentController = Robot->GetController();
+		if (CurrentController && CurrentController->IsA<APlayerController>() && CurrentController != NewPlayer)
+		{
+			continue; // Already assigned to another player
+		}
+
+		// Check the spawn config to see if this is a Player slot
+		if (RobotSpawnConfigs.IsValidIndex(i) && RobotSpawnConfigs[i].ControllerType != ERobotControllerType::Player)
+		{
+			continue; // AI slot
+		}
+
+		// If uncontrolled or this is the listen server's first player controller re-assignment
+		if (!CurrentController || CurrentController == NewPlayer)
+		{
+			NewPlayer->Possess(Robot);
+
+			// Set up PlayerState reference
+			ARobotRallyPlayerState* PS = Cast<ARobotRallyPlayerState>(NewPlayer->PlayerState);
+			if (PS)
+			{
+				PS->Rep_Robot = Robot;
+			}
+
+			// Set up camera for this player
+			if (GridManagerInstance)
+			{
+				FVector CamGridCenter = GridManagerInstance->GridToWorld(FIntVector(
+					GridManagerInstance->Width / 2, GridManagerInstance->Height / 2, 0));
+				float CameraHeight = GridManagerInstance->Width * GridManagerInstance->TileSize * 1.2f;
+				FVector CamLocation(CamGridCenter.X, CamGridCenter.Y, CameraHeight);
+				FRotator CamRotation(-90.0f, 0.0f, 0.0f);
+
+				FActorSpawnParameters CamSpawnParams;
+				CamSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+				ACameraActor* TopDownCamera = GetWorld()->SpawnActor<ACameraActor>(
+					ACameraActor::StaticClass(), CamLocation, CamRotation, CamSpawnParams);
+
+				if (TopDownCamera)
+				{
+					NewPlayer->SetViewTargetWithBlend(TopDownCamera, 0.0f);
+				}
+			}
+
+			// Sync hand if we're in programming phase
+			if (CurrentState == EGameState::Programming)
+			{
+				SyncPlayerStateHand(Robot);
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("Assigned Robot %d to player %s"), i, *NewPlayer->GetName());
+			BroadcastEventMessage(FString::Printf(TEXT("Player joined and assigned to Robot %d"), i), FColor::Cyan);
+			return;
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("No available robot slot for player %s"), *NewPlayer->GetName());
+}
+
+void ARobotRallyGameMode::SyncPlayerStateHand(ARobotPawn* Robot)
+{
+	if (!Robot) return;
+
+	// Find the program for this robot
+	FRobotProgram* Program = RobotPrograms.FindByPredicate([Robot](const FRobotProgram& P)
+	{
+		return P.Robot == Robot;
+	});
+	if (!Program) return;
+
+	// Find the PlayerController and PlayerState for this robot
+	AController* Controller = Robot->GetController();
+	APlayerController* PC = Cast<APlayerController>(Controller);
+	if (!PC) return;
+
+	ARobotRallyPlayerState* PS = Cast<ARobotRallyPlayerState>(PC->PlayerState);
+	if (!PS) return;
+
+	// Copy hand and registers to PlayerState for replication
+	PS->Rep_HandCards = Program->HandCards;
+	PS->Rep_RegisterSlots = Program->RegisterSlots;
 }
 
 void ARobotRallyGameMode::BeginPlay()
@@ -164,6 +308,20 @@ void ARobotRallyGameMode::StartProgrammingPhase()
 	DiscardHand();
 	DealHandsToAllRobots();
 
+	// Sync GameState
+	ARobotRallyGameState* GS = GetGameState<ARobotRallyGameState>();
+	if (GS)
+	{
+		GS->Rep_CurrentGameState = CurrentState;
+		GS->Rep_CurrentRegister = CurrentRegister;
+	}
+
+	// Sync hand cards to PlayerStates for all human players
+	for (ARobotPawn* Robot : Robots)
+	{
+		if (Robot) SyncPlayerStateHand(Robot);
+	}
+
 	// Reset ready tracking
 	ReadyControllers.Empty();
 
@@ -211,6 +369,14 @@ void ARobotRallyGameMode::StartExecutionPhase()
 	}
 
 	CurrentState = EGameState::Executing;
+
+	// Sync GameState
+	ARobotRallyGameState* GS = GetGameState<ARobotRallyGameState>();
+	if (GS)
+	{
+		GS->Rep_CurrentGameState = CurrentState;
+	}
+
 	CommitAllRobotPrograms();
 	DiscardHand();
 
@@ -249,48 +415,30 @@ void ARobotRallyGameMode::ProcessExecutionQueue()
 {
 	if (CurrentExecutionIndex >= ExecutionQueue.Num())
 	{
-		// All cards in this register executed
-		CurrentRegister++;
-
-		if (CurrentRegister >= NUM_REGISTERS)
-		{
-			ShowEventMessage(TEXT("All registers executed!"), FColor::Green);
-			StartProgrammingPhase();
-			return;
-		}
-
-		// Build queue for next register
-		BuildExecutionQueue(CurrentRegister);
-		ProcessExecutionQueue();
+		// All cards in this register executed - process tile effects
+		ProcessAllRobotTileEffects();
 		return;
 	}
 
-	// Get current priority level
-	int32 CurrentPriority = ExecutionQueue[CurrentExecutionIndex].Card.Priority;
+	// Execute one robot at a time, priority order (highest first)
+	FExecutionQueueEntry& Entry = ExecutionQueue[CurrentExecutionIndex];
 
-	// Execute all cards with same priority in parallel
 	MovingRobots.Empty();
 
-	while (CurrentExecutionIndex < ExecutionQueue.Num() &&
-	       ExecutionQueue[CurrentExecutionIndex].Card.Priority == CurrentPriority)
+	if (Entry.Robot && Entry.Robot->bIsAlive)
 	{
-		FExecutionQueueEntry& Entry = ExecutionQueue[CurrentExecutionIndex];
+		int32 RobotIndex = Robots.Find(Entry.Robot);
+		ShowEventMessage(FString::Printf(TEXT("R%d: %s (P%d)"),
+			RobotIndex, *GetCardActionName(Entry.Card.Action), Entry.Card.Priority),
+			FColor::White);
 
-		if (Entry.Robot && Entry.Robot->bIsAlive)
-		{
-			int32 RobotIndex = Robots.Find(Entry.Robot);
-			ShowEventMessage(FString::Printf(TEXT("R%d: %s (P%d)"),
-				RobotIndex, *GetCardActionName(Entry.Card.Action), Entry.Card.Priority),
-				FColor::White);
-
-			ExecuteCardAction(Entry.Robot, Entry.Card.Action);
-			MovingRobots.Add(Entry.Robot);
-		}
-
-		CurrentExecutionIndex++;
+		ExecuteCardAction(Entry.Robot, Entry.Card.Action);
+		MovingRobots.Add(Entry.Robot);
 	}
 
-	// Start timer to wait for all parallel movements to complete
+	CurrentExecutionIndex++;
+
+	// Wait for this robot's movement to complete, then process next
 	GetWorld()->GetTimerManager().SetTimer(
 		MovementCheckTimerHandle,
 		this,
@@ -315,11 +463,11 @@ void ARobotRallyGameMode::CheckParallelMovementComplete()
 		}
 	}
 
-	// All robots finished moving?
+	// Robot finished moving - continue to next robot in queue
 	if (MovingRobots.Num() == 0)
 	{
 		GetWorld()->GetTimerManager().ClearTimer(MovementCheckTimerHandle);
-		ProcessAllRobotTileEffects();
+		ProcessExecutionQueue();
 	}
 }
 
@@ -481,6 +629,10 @@ void ARobotRallyGameMode::CheckWinLoseConditions()
 				ShowEventMessage(FString::Printf(TEXT("VICTORY! Robot %d collected all %d checkpoints!"),
 					i, TotalCheckpoints), FColor::Green);
 				CurrentState = EGameState::GameOver;
+				if (ARobotRallyGameState* GS = GetGameState<ARobotRallyGameState>())
+				{
+					GS->Rep_CurrentGameState = CurrentState;
+				}
 				return;
 			}
 		}
@@ -491,6 +643,10 @@ void ARobotRallyGameMode::CheckWinLoseConditions()
 	{
 		ShowEventMessage(TEXT("GAME OVER - All robots destroyed!"), FColor::Red);
 		CurrentState = EGameState::GameOver;
+		if (ARobotRallyGameState* GS = GetGameState<ARobotRallyGameState>())
+		{
+			GS->Rep_CurrentGameState = CurrentState;
+		}
 	}
 }
 
@@ -503,12 +659,26 @@ void ARobotRallyGameMode::OnTileEffectsComplete()
 
 	if (CurrentState == EGameState::Executing)
 	{
-		// Continue to next card after 0.3s delay
+		// All robots in this register moved and tile effects processed
+		// Advance to next register
+		CurrentRegister++;
+
+		if (CurrentRegister >= NUM_REGISTERS)
+		{
+			ShowEventMessage(TEXT("All registers executed!"), FColor::Green);
+			StartProgrammingPhase();
+			return;
+		}
+
+		// Build queue for next register after short delay
 		FTimerHandle DelayHandle;
 		GetWorld()->GetTimerManager().SetTimer(
 			DelayHandle,
-			this,
-			&ARobotRallyGameMode::ProcessExecutionQueue,
+			[this]()
+			{
+				BuildExecutionQueue(CurrentRegister);
+				ProcessExecutionQueue();
+			},
 			0.3f,
 			false);
 	}
@@ -706,6 +876,9 @@ void ARobotRallyGameMode::SelectCardFromHand(ARobotPawn* Robot, int32 HandIndex)
 				Robots.Find(Robot), i + 1,
 				*GetCardActionName(Card.Action), Card.Priority),
 				FColor::Green);
+
+			// Sync to PlayerState for HUD replication
+			SyncPlayerStateHand(Robot);
 			return;
 		}
 	}
@@ -732,6 +905,9 @@ void ARobotRallyGameMode::UndoLastSelection()
 		{
 			ShowEventMessage(FString::Printf(TEXT("Cleared R%d"), i + 1), FColor::Yellow);
 			Program->RegisterSlots[i] = -1;
+
+			// Sync to PlayerState for HUD replication
+			SyncPlayerStateHand(Robots[0]);
 			return;
 		}
 	}
@@ -828,6 +1004,11 @@ void ARobotRallyGameMode::SpawnRobotsWithControllers()
 		SpawnConfigs.Add(AIConfig);
 	}
 
+	// Store spawn configs for PostLogin to reference
+	RobotSpawnConfigs = SpawnConfigs;
+
+	bool bIsNetworkMode = (GetNetMode() != NM_Standalone);
+
 	int32 NumRobotsToSpawn = SpawnConfigs.Num();
 	Robots.Reserve(NumRobotsToSpawn);
 	RobotPrograms.Reserve(NumRobotsToSpawn);
@@ -862,34 +1043,42 @@ void ARobotRallyGameMode::SpawnRobotsWithControllers()
 			// Assign controller
 			if (Config.ControllerType == ERobotControllerType::Player)
 			{
-				// Use the existing auto-created PlayerController instead of spawning a new one
-				APlayerController* PC = World->GetFirstPlayerController();
-				if (PC)
+				if (bIsNetworkMode)
 				{
-					PC->Possess(NewRobot);
-
-					// Spawn a top-down camera above the grid center
-					FVector CamGridCenter = GridManagerInstance->GridToWorld(FIntVector(
-						GridManagerInstance->Width / 2, GridManagerInstance->Height / 2, 0));
-					float CameraHeight = GridManagerInstance->Width * GridManagerInstance->TileSize * 1.2f;
-					FVector CamLocation(CamGridCenter.X, CamGridCenter.Y, CameraHeight);
-					FRotator CamRotation(-90.0f, 0.0f, 0.0f);
-
-					FActorSpawnParameters CamSpawnParams;
-					CamSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-					ACameraActor* TopDownCamera = World->SpawnActor<ACameraActor>(
-						ACameraActor::StaticClass(), CamLocation, CamRotation, CamSpawnParams);
-
-					if (TopDownCamera)
+					// Network mode: leave uncontrolled, PostLogin will assign players
+					UE_LOG(LogTemp, Log, TEXT("Robot %d (Player slot) left uncontrolled for network assignment"), i);
+				}
+				else
+				{
+					// Standalone: use the existing auto-created PlayerController
+					APlayerController* PC = World->GetFirstPlayerController();
+					if (PC)
 					{
-						PC->SetViewTargetWithBlend(TopDownCamera, 0.0f);
+						PC->Possess(NewRobot);
+
+						// Spawn a top-down camera above the grid center
+						FVector CamGridCenter = GridManagerInstance->GridToWorld(FIntVector(
+							GridManagerInstance->Width / 2, GridManagerInstance->Height / 2, 0));
+						float CameraHeight = GridManagerInstance->Width * GridManagerInstance->TileSize * 1.2f;
+						FVector CamLocation(CamGridCenter.X, CamGridCenter.Y, CameraHeight);
+						FRotator CamRotation(-90.0f, 0.0f, 0.0f);
+
+						FActorSpawnParameters CamSpawnParams;
+						CamSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+						ACameraActor* TopDownCamera = World->SpawnActor<ACameraActor>(
+							ACameraActor::StaticClass(), CamLocation, CamRotation, CamSpawnParams);
+
+						if (TopDownCamera)
+						{
+							PC->SetViewTargetWithBlend(TopDownCamera, 0.0f);
+						}
 					}
 				}
 			}
 			else
 			{
-				// Spawn AI controller
+				// Spawn AI controller (runs on server in both standalone and network)
 				TSubclassOf<AController> ControllerClass = GetControllerClassForType(Config.ControllerType);
 				if (ControllerClass)
 				{
@@ -917,6 +1106,31 @@ void ARobotRallyGameMode::SpawnRobotsWithControllers()
 
 			UE_LOG(LogTemp, Log, TEXT("Spawned Robot %d at (%d,%d) with controller type %d"),
 				i, SpawnGrid.X, SpawnGrid.Y, (int32)Config.ControllerType);
+		}
+	}
+
+	// Populate GameState with robot list and grid data
+	ARobotRallyGameState* GS = GetGameState<ARobotRallyGameState>();
+	if (GS)
+	{
+		GS->AllRobots = Robots;
+		GS->Rep_GridWidth = GridManagerInstance->Width;
+		GS->Rep_GridHeight = GridManagerInstance->Height;
+		GS->Rep_TotalCheckpoints = GridManagerInstance->GetTotalCheckpoints();
+
+		// Build replicated tile overrides (non-Normal tiles only)
+		GS->Rep_TileOverrides.Empty();
+		for (const auto& Pair : GridManagerInstance->GridMap)
+		{
+			if (Pair.Value.TileType != ETileType::Normal)
+			{
+				FReplicatedTileEntry Entry;
+				Entry.X = Pair.Key.X;
+				Entry.Y = Pair.Key.Y;
+				Entry.TileType = Pair.Value.TileType;
+				Entry.CheckpointNumber = Pair.Value.CheckpointNumber;
+				GS->Rep_TileOverrides.Add(Entry);
+			}
 		}
 	}
 

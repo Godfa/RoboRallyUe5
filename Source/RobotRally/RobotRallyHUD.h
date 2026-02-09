@@ -6,6 +6,9 @@
 #include "GameFramework/HUD.h"
 #include "RobotRallyHUD.generated.h"
 
+class ARobotRallyPlayerState;
+class ARobotRallyGameState;
+
 USTRUCT()
 struct FEventMessage
 {
@@ -28,6 +31,13 @@ public:
 
 private:
 	void DrawCardSelection();
+	void DrawNetworkDebug();
+
+	// Helper: get local player's PlayerState
+	ARobotRallyPlayerState* GetLocalPlayerState() const;
+
+	// Helper: get GameState
+	ARobotRallyGameState* GetRobotRallyGameState() const;
 
 	TArray<FEventMessage> Messages;
 

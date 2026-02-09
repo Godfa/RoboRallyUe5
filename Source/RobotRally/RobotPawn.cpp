@@ -10,6 +10,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Net/UnrealNetwork.h"
 
 #if WITH_EDITORONLY_DATA
 #include "Materials/Material.h"
@@ -19,6 +20,8 @@
 ARobotPawn::ARobotPawn()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	bReplicates = true;
+	SetReplicateMovement(true);
 
 	// Initialize movement component
 	RobotMovement = CreateDefaultSubobject<URobotMovementComponent>(TEXT("RobotMovement"));
@@ -165,9 +168,30 @@ void ARobotPawn::Tick(float DeltaTime)
 	// Input is now handled by ARobotController
 }
 
+void ARobotPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(ARobotPawn, GridX);
+	DOREPLIFETIME(ARobotPawn, GridY);
+	DOREPLIFETIME(ARobotPawn, Health);
+	DOREPLIFETIME(ARobotPawn, bIsAlive);
+	DOREPLIFETIME(ARobotPawn, Lives);
+	DOREPLIFETIME(ARobotPawn, CurrentCheckpoint);
+	DOREPLIFETIME(ARobotPawn, BodyColor);
+}
+
+void ARobotPawn::OnRep_Health()
+{
+	UE_LOG(LogTemp, Log, TEXT("RobotPawn OnRep_Health: %d/%d"), Health, MaxHealth);
+}
+
 void ARobotPawn::ApplyDamage(int32 Amount)
 {
 	if (!bIsAlive) return;
+
+	// Only server applies damage
+	if (!HasAuthority()) return;
 
 	Health = FMath::Max(0, Health - Amount);
 	UE_LOG(LogTemp, Log, TEXT("Robot took %d damage! Health: %d/%d"), Amount, Health, MaxHealth);
@@ -193,6 +217,9 @@ void ARobotPawn::ApplyDamage(int32 Amount)
 
 void ARobotPawn::Respawn()
 {
+	// Only server handles respawn
+	if (!HasAuthority()) return;
+
 	// Restore health
 	Health = MaxHealth;
 	bIsAlive = true;
@@ -221,6 +248,9 @@ void ARobotPawn::Respawn()
 
 void ARobotPawn::ReachCheckpoint(int32 Number)
 {
+	// Only server processes checkpoints
+	if (!HasAuthority()) return;
+
 	ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
 
 	if (Number == CurrentCheckpoint + 1)

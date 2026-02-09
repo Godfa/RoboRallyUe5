@@ -4,11 +4,13 @@
 #include "GridManager.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
+#include "Net/UnrealNetwork.h"
 
 URobotMovementComponent::URobotMovementComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = true;
+	SetIsReplicatedByDefault(true);
 }
 
 void URobotMovementComponent::BeginPlay()
@@ -29,6 +31,28 @@ void URobotMovementComponent::BeginPlay()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("URobotMovementComponent: No GridManager found! Move validation disabled."));
 	}
+}
+
+void URobotMovementComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(URobotMovementComponent, Rep_TargetLocation);
+	DOREPLIFETIME(URobotMovementComponent, Rep_TargetRotation);
+}
+
+void URobotMovementComponent::OnRep_TargetLocation()
+{
+	// Client receives new target from server - start interpolating
+	TargetLocation = Rep_TargetLocation;
+	bIsMoving = true;
+}
+
+void URobotMovementComponent::OnRep_TargetRotation()
+{
+	// Client receives new rotation target from server - start interpolating
+	TargetRotation = Rep_TargetRotation;
+	bIsRotating = true;
 }
 
 void URobotMovementComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -92,6 +116,8 @@ void URobotMovementComponent::InitializeGridPosition(int32 InGridX, int32 InGrid
 		TargetLocation = GetOwner()->GetActorLocation();
 	}
 	TargetRotation = GetOwner()->GetActorRotation();
+	Rep_TargetLocation = TargetLocation;
+	Rep_TargetRotation = TargetRotation;
 }
 
 void URobotMovementComponent::MoveInGrid(int32 Distance)
@@ -149,6 +175,9 @@ void URobotMovementComponent::MoveInGrid(int32 Distance)
 		bIsMoving = true;
 	}
 
+	// Sync replicated target for clients
+	Rep_TargetLocation = TargetLocation;
+
 	// Notify listeners of new grid position
 	OnGridPositionChanged.Broadcast(CurrentGridX, CurrentGridY);
 }
@@ -158,6 +187,7 @@ void URobotMovementComponent::MoveToWorldPosition(FVector NewTarget)
 	TargetLocation = NewTarget;
 	TargetLocation.Z = GetOwner()->GetActorLocation().Z;
 	bIsMoving = true;
+	Rep_TargetLocation = TargetLocation;
 }
 
 void URobotMovementComponent::SetGridPosition(int32 NewX, int32 NewY)
@@ -184,4 +214,5 @@ void URobotMovementComponent::RotateInGrid(int32 Steps)
 	TargetRotation.Yaw += Steps * 90.0f;
 	TargetRotation.Yaw = FMath::RoundToFloat(TargetRotation.Yaw / 90.0f) * 90.0f;
 	bIsRotating = true;
+	Rep_TargetRotation = TargetRotation;
 }

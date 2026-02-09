@@ -12,6 +12,7 @@ class ARobotPawn;
 class ARobotRallyHUD;
 class AController;
 class ARobotAIController;
+class ARobotRallyPlayerState;
 
 UENUM(BlueprintType)
 enum class ECardAction : uint8
@@ -122,6 +123,19 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+	// Network lifecycle
+	virtual void PostLogin(APlayerController* NewPlayer) override;
+	virtual void Logout(AController* Exiting) override;
+
+	// Assign a connecting player to an uncontrolled player-slot robot
+	void AssignRobotToPlayer(APlayerController* NewPlayer);
+
+	// Copy server-side FRobotProgram hand/registers to the player's PlayerState for replication
+	void SyncPlayerStateHand(ARobotPawn* Robot);
+
+	// Broadcast event message to all clients via GameState multicast RPC
+	void BroadcastEventMessage(const FString& Text, FColor Color = FColor::White);
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Game")
 	EGameState CurrentState;
 

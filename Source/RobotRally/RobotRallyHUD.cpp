@@ -3,9 +3,31 @@
 #include "RobotRallyHUD.h"
 #include "RobotPawn.h"
 #include "RobotRallyGameMode.h"
+#include "RobotRallyGameState.h"
+#include "RobotRallyPlayerState.h"
 #include "Engine/Canvas.h"
 #include "Engine/Font.h"
 #include "GameFramework/PlayerController.h"
+
+ARobotRallyPlayerState* ARobotRallyHUD::GetLocalPlayerState() const
+{
+	APlayerController* PC = GetOwningPlayerController();
+	if (PC)
+	{
+		return Cast<ARobotRallyPlayerState>(PC->PlayerState);
+	}
+	return nullptr;
+}
+
+ARobotRallyGameState* ARobotRallyHUD::GetRobotRallyGameState() const
+{
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		return Cast<ARobotRallyGameState>(World->GetGameState());
+	}
+	return nullptr;
+}
 
 void ARobotRallyHUD::DrawHUD()
 {
@@ -116,18 +138,29 @@ void ARobotRallyHUD::DrawHUD()
 		CPText.EnableShadow(FLinearColor::Black);
 		Canvas->DrawItem(CPText);
 
-		// Game state
+		// Game state - read from GameState in network mode, GameMode in standalone
 		FString StateText;
+		EGameState CurrentGameState = EGameState::Programming;
+
+		ARobotRallyGameState* GS = GetRobotRallyGameState();
 		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
-		if (GM)
+
+		if (GS && GetWorld()->GetNetMode() != NM_Standalone)
 		{
-			switch (GM->CurrentState)
-			{
-			case EGameState::Programming: StateText = TEXT("PROGRAMMING (1-9 = cards, Bksp = undo, E = go)"); break;
-			case EGameState::Executing:   StateText = TEXT("EXECUTING..."); break;
-			case EGameState::GameOver:    StateText = Robot->bIsAlive ? TEXT("VICTORY!") : TEXT("GAME OVER"); break;
-			}
+			CurrentGameState = GS->Rep_CurrentGameState;
 		}
+		else if (GM)
+		{
+			CurrentGameState = GM->CurrentState;
+		}
+
+		switch (CurrentGameState)
+		{
+		case EGameState::Programming: StateText = TEXT("PROGRAMMING (1-9 = cards, Bksp = undo, E = go)"); break;
+		case EGameState::Executing:   StateText = TEXT("EXECUTING..."); break;
+		case EGameState::GameOver:    StateText = Robot->bIsAlive ? TEXT("VICTORY!") : TEXT("GAME OVER"); break;
+		}
+
 		FCanvasTextItem StateItem(FVector2D(BarX, BarY + BarHeight + 44),
 			FText::FromString(StateText), Font, FLinearColor(0.0f, 1.0f, 1.0f));
 		StateItem.EnableShadow(FLinearColor::Black);
@@ -142,29 +175,75 @@ void ARobotRallyHUD::DrawHUD()
 	}
 
 	DrawCardSelection();
+
+	// Network debug overlay (only in network mode)
+	if (GetWorld()->GetNetMode() != NM_Standalone)
+	{
+		DrawNetworkDebug();
+	}
 }
 
 void ARobotRallyHUD::DrawCardSelection()
 {
-	ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
-	if (!GM || GM->CurrentState != EGameState::Programming) return;
+	bool bIsNetwork = (GetWorld()->GetNetMode() != NM_Standalone);
 
-	// Get player's robot (Robot[0])
-	if (!GM->Robots.IsValidIndex(0)) return;
-	ARobotPawn* PlayerRobot = GM->Robots[0];
-
-	// Find player's program
-	FRobotProgram* PlayerProgram = nullptr;
-	for (FRobotProgram& Program : GM->RobotPrograms)
+	// Determine game state
+	EGameState CurrentGameState = EGameState::Programming;
+	if (bIsNetwork)
 	{
-		if (Program.Robot == PlayerRobot)
-		{
-			PlayerProgram = &Program;
-			break;
-		}
+		ARobotRallyGameState* GS = GetRobotRallyGameState();
+		if (GS) CurrentGameState = GS->Rep_CurrentGameState;
+	}
+	else
+	{
+		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+		if (GM) CurrentGameState = GM->CurrentState;
 	}
 
-	if (!PlayerProgram || PlayerProgram->HandCards.Num() == 0) return;
+	if (CurrentGameState != EGameState::Programming) return;
+
+	// In network mode, read from PlayerState; in standalone, read from GameMode
+	TArray<FRobotCard> HandCards;
+	TArray<int32> RegisterSlots;
+	int32 RobotIndex = 0;
+
+	if (bIsNetwork)
+	{
+		ARobotRallyPlayerState* PS = GetLocalPlayerState();
+		if (!PS || PS->Rep_HandCards.Num() == 0) return;
+
+		HandCards = PS->Rep_HandCards;
+		RegisterSlots = PS->Rep_RegisterSlots;
+
+		// Get robot index from GameState
+		ARobotRallyGameState* GS = GetRobotRallyGameState();
+		if (GS && PS->Rep_Robot)
+		{
+			RobotIndex = GS->AllRobots.Find(PS->Rep_Robot);
+		}
+	}
+	else
+	{
+		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+		if (!GM || !GM->Robots.IsValidIndex(0)) return;
+
+		ARobotPawn* PlayerRobot = GM->Robots[0];
+		FRobotProgram* PlayerProgram = nullptr;
+		for (FRobotProgram& Program : GM->RobotPrograms)
+		{
+			if (Program.Robot == PlayerRobot)
+			{
+				PlayerProgram = &Program;
+				break;
+			}
+		}
+
+		if (!PlayerProgram || PlayerProgram->HandCards.Num() == 0) return;
+
+		HandCards = PlayerProgram->HandCards;
+		RegisterSlots = PlayerProgram->RegisterSlots;
+		RobotIndex = GM->Robots.Find(PlayerRobot);
+	}
 
 	UFont* Font = GEngine->GetLargeFont();
 	const float Padding = 10.0f;
@@ -174,7 +253,7 @@ void ARobotRallyHUD::DrawCardSelection()
 	float CurY = Padding;
 
 	// --- Panel background ---
-	float TotalHeight = SlotHeight * (ARobotRallyGameMode::NUM_REGISTERS + PlayerProgram->HandCards.Num() + 4);
+	float TotalHeight = SlotHeight * (ARobotRallyGameMode::NUM_REGISTERS + HandCards.Num() + 4);
 	FCanvasTileItem PanelBG(
 		FVector2D(PanelX, CurY),
 		FVector2D(PanelWidth, TotalHeight),
@@ -185,19 +264,18 @@ void ARobotRallyHUD::DrawCardSelection()
 	float TextX = PanelX + Padding;
 
 	// --- Registers header ---
-	int32 PlayerRobotIndex = GM->Robots.Find(PlayerRobot);
-	FString HeaderText = FString::Printf(TEXT("ROBOT %d - PROGRAMMING"), PlayerRobotIndex);
+	FString HeaderText = FString::Printf(TEXT("ROBOT %d - PROGRAMMING"), RobotIndex);
 	FCanvasTextItem Header(FVector2D(TextX, CurY),
 		FText::FromString(HeaderText), Font, FLinearColor(1.0f, 1.0f, 0.0f));
 	Header.EnableShadow(FLinearColor::Black);
 	Canvas->DrawItem(Header);
 	CurY += SlotHeight;
 
-	// Count filled registers to determine "next" slot
+	// Count filled registers
 	int32 FilledCount = 0;
 	for (int32 i = 0; i < ARobotRallyGameMode::NUM_REGISTERS; ++i)
 	{
-		if (PlayerProgram->RegisterSlots.IsValidIndex(i) && PlayerProgram->RegisterSlots[i] != -1)
+		if (RegisterSlots.IsValidIndex(i) && RegisterSlots[i] != -1)
 			FilledCount++;
 	}
 
@@ -207,14 +285,14 @@ void ARobotRallyHUD::DrawCardSelection()
 		FString SlotText;
 		FLinearColor SlotColor;
 
-		bool bFilled = PlayerProgram->RegisterSlots.IsValidIndex(i) && PlayerProgram->RegisterSlots[i] != -1;
+		bool bFilled = RegisterSlots.IsValidIndex(i) && RegisterSlots[i] != -1;
 		if (bFilled)
 		{
-			int32 HandIdx = PlayerProgram->RegisterSlots[i];
-			if (PlayerProgram->HandCards.IsValidIndex(HandIdx))
+			int32 HandIdx = RegisterSlots[i];
+			if (HandCards.IsValidIndex(HandIdx))
 			{
-				FString CardName = ARobotRallyGameMode::GetCardActionName(PlayerProgram->HandCards[HandIdx].Action);
-				SlotText = FString::Printf(TEXT("R%d: %s (P%d)"), i + 1, *CardName, PlayerProgram->HandCards[HandIdx].Priority);
+				FString CardName = ARobotRallyGameMode::GetCardActionName(HandCards[HandIdx].Action);
+				SlotText = FString::Printf(TEXT("R%d: %s (P%d)"), i + 1, *CardName, HandCards[HandIdx].Priority);
 			}
 			else
 			{
@@ -249,21 +327,27 @@ void ARobotRallyHUD::DrawCardSelection()
 	CurY += SlotHeight;
 
 	// --- Hand cards ---
-	for (int32 i = 0; i < PlayerProgram->HandCards.Num(); ++i)
+	for (int32 i = 0; i < HandCards.Num(); ++i)
 	{
-		FString CardName = ARobotRallyGameMode::GetCardActionName(PlayerProgram->HandCards[i].Action);
-		bool bAssigned = GM->IsCardInRegister(PlayerProgram, i);
+		FString CardName = ARobotRallyGameMode::GetCardActionName(HandCards[i].Action);
+
+		// Check if this card is assigned to a register
+		bool bAssigned = false;
+		for (int32 Slot : RegisterSlots)
+		{
+			if (Slot == i) { bAssigned = true; break; }
+		}
 
 		FString CardText;
 		FLinearColor CardColor;
 		if (bAssigned)
 		{
-			CardText = FString::Printf(TEXT("%d: %s (P%d) [R]"), i + 1, *CardName, PlayerProgram->HandCards[i].Priority);
+			CardText = FString::Printf(TEXT("%d: %s (P%d) [R]"), i + 1, *CardName, HandCards[i].Priority);
 			CardColor = FLinearColor(0.4f, 0.4f, 0.4f); // Gray = already assigned
 		}
 		else
 		{
-			CardText = FString::Printf(TEXT("%d: %s (P%d)"), i + 1, *CardName, PlayerProgram->HandCards[i].Priority);
+			CardText = FString::Printf(TEXT("%d: %s (P%d)"), i + 1, *CardName, HandCards[i].Priority);
 			CardColor = FLinearColor::White;
 		}
 
@@ -289,6 +373,37 @@ void ARobotRallyHUD::DrawCardSelection()
 		FText::FromString(InstructionText), Font, FLinearColor(0.0f, 1.0f, 1.0f));
 	InstrItem.EnableShadow(FLinearColor::Black);
 	Canvas->DrawItem(InstrItem);
+}
+
+void ARobotRallyHUD::DrawNetworkDebug()
+{
+	UFont* Font = GEngine->GetSmallFont();
+	const float Padding = 10.0f;
+	float CurY = Canvas->SizeY - 30.0f;
+
+	// Net mode
+	FString NetModeStr;
+	switch (GetWorld()->GetNetMode())
+	{
+	case NM_Standalone:      NetModeStr = TEXT("Standalone"); break;
+	case NM_DedicatedServer: NetModeStr = TEXT("Dedicated Server"); break;
+	case NM_ListenServer:    NetModeStr = TEXT("Listen Server"); break;
+	case NM_Client:          NetModeStr = TEXT("Client"); break;
+	}
+
+	// Player count from GameState
+	int32 PlayerCount = 0;
+	ARobotRallyGameState* GS = GetRobotRallyGameState();
+	if (GS)
+	{
+		PlayerCount = GS->PlayerArray.Num();
+	}
+
+	FString DebugText = FString::Printf(TEXT("NET: %s | Players: %d"), *NetModeStr, PlayerCount);
+	FCanvasTextItem DebugItem(FVector2D(Canvas->SizeX - 300.0f, CurY),
+		FText::FromString(DebugText), Font, FLinearColor(0.5f, 0.8f, 1.0f, 0.8f));
+	DebugItem.EnableShadow(FLinearColor::Black);
+	Canvas->DrawItem(DebugItem);
 }
 
 void ARobotRallyHUD::AddEventMessage(const FString& Text, FColor Color)

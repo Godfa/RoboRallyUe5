@@ -12,6 +12,7 @@ class ARobotRallyGameMode;
 /**
  * Player controller for Robot Rally.
  * Handles keyboard input for robot movement and card selection.
+ * In network mode, sends RPCs to server instead of calling GameMode directly.
  */
 UCLASS()
 class ROBOTRALLY_API ARobotController : public APlayerController
@@ -50,6 +51,22 @@ private:
 
 	// Helper to select card by index
 	void SelectCard(int32 CardIndex);
+
+	// --- Server RPCs ---
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerSelectCard(int32 HandIndex);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerUndoSelection();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerCommitProgram();
+
+	// --- Client RPCs ---
+
+	UFUNCTION(Client, Reliable)
+	void ClientNotifyError(const FString& Message);
 
 	// Cached references
 	UPROPERTY()

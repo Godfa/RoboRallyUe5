@@ -17,11 +17,11 @@ void ARobotController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Cache game mode reference
+	// Cache game mode reference (only valid on server/standalone)
 	GameMode = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
 
-	UE_LOG(LogTemp, Log, TEXT("RobotController::BeginPlay - GameMode: %s"),
-		GameMode ? TEXT("Valid") : TEXT("NULL"));
+	UE_LOG(LogTemp, Log, TEXT("RobotController::BeginPlay - GameMode: %s, NetMode: %d"),
+		GameMode ? TEXT("Valid") : TEXT("NULL"), (int32)GetNetMode());
 }
 
 void ARobotController::OnPossess(APawn* InPawn)
@@ -74,15 +74,10 @@ void ARobotController::SetupInputComponent()
 
 void ARobotController::OnMoveForward()
 {
-	UE_LOG(LogTemp, Log, TEXT("OnMoveForward called!"));
+	// WASD disabled in network mode (debug-only feature)
+	if (GetNetMode() != NM_Standalone) return;
 
-	if (!ControlledRobot || !GameMode)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("OnMoveForward: ControlledRobot=%s, GameMode=%s"),
-			ControlledRobot ? TEXT("Valid") : TEXT("NULL"),
-			GameMode ? TEXT("Valid") : TEXT("NULL"));
-		return;
-	}
+	if (!ControlledRobot || !GameMode) return;
 	if (!ControlledRobot->bIsAlive) return;
 	if (GameMode->CurrentState != EGameState::Programming) return;
 	if (GameMode->bProcessingTileEffects) return;
@@ -100,6 +95,8 @@ void ARobotController::OnMoveForward()
 
 void ARobotController::OnMoveBackward()
 {
+	if (GetNetMode() != NM_Standalone) return;
+
 	if (!ControlledRobot || !GameMode) return;
 	if (!ControlledRobot->bIsAlive) return;
 	if (GameMode->CurrentState != EGameState::Programming) return;
@@ -118,6 +115,8 @@ void ARobotController::OnMoveBackward()
 
 void ARobotController::OnMoveLeft()
 {
+	if (GetNetMode() != NM_Standalone) return;
+
 	if (!ControlledRobot || !GameMode) return;
 	if (!ControlledRobot->bIsAlive) return;
 	if (GameMode->CurrentState != EGameState::Programming) return;
@@ -135,6 +134,8 @@ void ARobotController::OnMoveLeft()
 
 void ARobotController::OnMoveRight()
 {
+	if (GetNetMode() != NM_Standalone) return;
+
 	if (!ControlledRobot || !GameMode) return;
 	if (!ControlledRobot->bIsAlive) return;
 	if (GameMode->CurrentState != EGameState::Programming) return;
@@ -152,30 +153,39 @@ void ARobotController::OnMoveRight()
 
 void ARobotController::SelectCard(int32 CardIndex)
 {
-	if (!GameMode || !ControlledRobot) return;
-	if (GameMode->CurrentState != EGameState::Programming) return;
-
-	GameMode->SelectCardFromHand(ControlledRobot, CardIndex);
-
-	// Check if we just filled the 5th register
-	FRobotProgram* Program = GameMode->RobotPrograms.FindByPredicate([this](const FRobotProgram& P)
+	if (GetNetMode() == NM_Standalone)
 	{
-		return P.Robot == ControlledRobot;
-	});
+		// Standalone: call GameMode directly
+		if (!GameMode || !ControlledRobot) return;
+		if (GameMode->CurrentState != EGameState::Programming) return;
 
-	if (Program)
+		GameMode->SelectCardFromHand(ControlledRobot, CardIndex);
+
+		// Check if we just filled the 5th register
+		FRobotProgram* Program = GameMode->RobotPrograms.FindByPredicate([this](const FRobotProgram& P)
+		{
+			return P.Robot == ControlledRobot;
+		});
+
+		if (Program)
+		{
+			int32 FilledCount = 0;
+			for (int32 Slot : Program->RegisterSlots)
+			{
+				if (Slot != -1) FilledCount++;
+			}
+
+			// Signal ready when all 5 registers are filled
+			if (FilledCount == ARobotRallyGameMode::NUM_REGISTERS)
+			{
+				GameMode->OnControllerReady(this);
+			}
+		}
+	}
+	else
 	{
-		int32 FilledCount = 0;
-		for (int32 Slot : Program->RegisterSlots)
-		{
-			if (Slot != -1) FilledCount++;
-		}
-
-		// Signal ready when all 5 registers are filled
-		if (FilledCount == ARobotRallyGameMode::NUM_REGISTERS)
-		{
-			GameMode->OnControllerReady(this);
-		}
+		// Network: send RPC to server
+		ServerSelectCard(CardIndex);
 	}
 }
 
@@ -191,18 +201,132 @@ void ARobotController::OnSelectCard9() { SelectCard(8); }
 
 void ARobotController::OnExecuteProgram()
 {
-	if (!GameMode) return;
-	if (GameMode->CurrentState == EGameState::Programming)
+	if (GetNetMode() == NM_Standalone)
 	{
-		GameMode->StartExecutionPhase();
+		if (!GameMode) return;
+		if (GameMode->CurrentState == EGameState::Programming)
+		{
+			GameMode->OnControllerReady(this);
+		}
+	}
+	else
+	{
+		ServerCommitProgram();
 	}
 }
 
 void ARobotController::OnUndoSelection()
 {
-	if (!GameMode) return;
-	if (GameMode->CurrentState == EGameState::Programming)
+	if (GetNetMode() == NM_Standalone)
 	{
-		GameMode->UndoLastSelection();
+		if (!GameMode) return;
+		if (GameMode->CurrentState == EGameState::Programming)
+		{
+			GameMode->UndoLastSelection();
+		}
 	}
+	else
+	{
+		ServerUndoSelection();
+	}
+}
+
+// --- Server RPC implementations ---
+
+bool ARobotController::ServerSelectCard_Validate(int32 HandIndex)
+{
+	return HandIndex >= 0 && HandIndex < 20; // Reasonable upper bound
+}
+
+void ARobotController::ServerSelectCard_Implementation(int32 HandIndex)
+{
+	if (!GameMode) GameMode = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+	if (!GameMode) return;
+
+	ARobotPawn* Robot = Cast<ARobotPawn>(GetPawn());
+	if (!Robot) return;
+
+	if (GameMode->CurrentState != EGameState::Programming)
+	{
+		ClientNotifyError(TEXT("Not in programming phase!"));
+		return;
+	}
+
+	GameMode->SelectCardFromHand(Robot, HandIndex);
+
+	// Check if all registers filled - auto-ready
+	FRobotProgram* Program = GameMode->RobotPrograms.FindByPredicate([Robot](const FRobotProgram& P)
+	{
+		return P.Robot == Robot;
+	});
+
+	if (Program)
+	{
+		int32 FilledCount = 0;
+		for (int32 Slot : Program->RegisterSlots)
+		{
+			if (Slot != -1) FilledCount++;
+		}
+
+		if (FilledCount == ARobotRallyGameMode::NUM_REGISTERS)
+		{
+			GameMode->OnControllerReady(this);
+		}
+	}
+}
+
+bool ARobotController::ServerUndoSelection_Validate()
+{
+	return true;
+}
+
+void ARobotController::ServerUndoSelection_Implementation()
+{
+	if (!GameMode) GameMode = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+	if (!GameMode) return;
+
+	if (GameMode->CurrentState != EGameState::Programming) return;
+
+	// Undo for this player's robot specifically
+	ARobotPawn* Robot = Cast<ARobotPawn>(GetPawn());
+	if (!Robot) return;
+
+	FRobotProgram* Program = GameMode->RobotPrograms.FindByPredicate([Robot](const FRobotProgram& P)
+	{
+		return P.Robot == Robot;
+	});
+
+	if (!Program) return;
+
+	// Find the last filled register and clear it
+	for (int32 i = ARobotRallyGameMode::NUM_REGISTERS - 1; i >= 0; --i)
+	{
+		if (Program->RegisterSlots[i] != -1)
+		{
+			GameMode->ShowEventMessage(FString::Printf(TEXT("Cleared R%d"), i + 1), FColor::Yellow);
+			Program->RegisterSlots[i] = -1;
+			GameMode->SyncPlayerStateHand(Robot);
+			return;
+		}
+	}
+}
+
+bool ARobotController::ServerCommitProgram_Validate()
+{
+	return true;
+}
+
+void ARobotController::ServerCommitProgram_Implementation()
+{
+	if (!GameMode) GameMode = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+	if (!GameMode) return;
+
+	if (GameMode->CurrentState != EGameState::Programming) return;
+
+	GameMode->OnControllerReady(this);
+}
+
+void ARobotController::ClientNotifyError_Implementation(const FString& Message)
+{
+	UE_LOG(LogTemp, Warning, TEXT("Server error: %s"), *Message);
 }
