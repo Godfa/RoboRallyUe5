@@ -2,7 +2,7 @@
 
 A digital implementation of the Robot Rally board game using Unreal Engine 5.7. Players program robots with movement cards and watch them execute commands on a grid-based game board.
 
-**Status**: Phase 3 Complete (Core gameplay functional) | [Technical Docs](docs/TECHNICAL_DOCUMENTATION.md) | [User Guide](docs/USER_GUIDE.md)
+**Status**: Phase 5 Complete (Multiplayer & Walls) | [Technical Docs](docs/TECHNICAL_DOCUMENTATION.md) | [User Guide](docs/USER_GUIDE.md) | [Changelog](CHANGELOG.md)
 
 ## Requirements
 
@@ -32,9 +32,13 @@ Source/RobotRally/
   RobotRally.h/.cpp              Module registration
   RobotPawn.h/.cpp               Robot character (ACharacter)
   RobotController.h/.cpp         Player input handling (WASD, cards)
-  RobotMovementComponent.h/.cpp  Grid movement (interpolated)
-  GridManager.h/.cpp             Game board (10x10 TMap grid)
+  RobotAIController.h/.cpp       AI robot controller (Easy/Medium)
+  RobotMovementComponent.h/.cpp  Grid movement with collision & walls
+  GridManager.h/.cpp             Game board with wall system
   RobotRallyGameMode.h/.cpp      Game state machine, card deck
+  RobotRallyGameState.h/.cpp     Network replicated game state
+  RobotRallyPlayerState.h/.cpp   Per-player replicated data
+  RobotRallyGameInstance.h/.cpp  Session management (LAN host/join)
   RobotRallyHUD.h/.cpp           On-screen HUD (health, events, cards)
 ```
 
@@ -62,6 +66,7 @@ Source/RobotRally/
 | Conveyor (N/S/E/W) | Moves robot at end of turn |
 | Laser | Damages robot |
 | Checkpoint | Must be collected in sequential order to win (1→2→3...) |
+| **Walls** | Blocks movement between tiles (on tile edges N/S/E/W) |
 
 ## Architecture
 
@@ -122,7 +127,19 @@ ARobotRallyGameMode          Game state machine, turn logic
 - [x] Tile effect processing after each card execution
 - [x] Win condition (all checkpoints) and lose condition (robot death)
 - [x] Checkpoint visual numbering (3D text labels visible from top-down view)
-- [ ] Collision checks between robots (pushing)
+- [x] Collision checks between robots (pushing)
+
+### Phase 5: Multiplayer & Wall System — COMPLETE
+- [x] Wall system on tile edges (N/S/E/W bitfield storage)
+- [x] Wall visual rendering (dark gray meshes at tile boundaries)
+- [x] Movement validation against walls (robots, pushing, conveyors)
+- [x] Network architecture (GameState, PlayerState, GameInstance)
+- [x] LAN multiplayer (2-8 players using OnlineSubsystem Null)
+- [x] Server-authoritative movement and tile effects
+- [x] RPC system for card selection and program commitment
+- [x] Robot collision detection and chain pushing mechanics
+- [x] AI controller framework (Easy/Medium difficulties)
+- [x] Priority-based execution order for multiple robots
 
 ### Phase 5: UI & Interface
 - [ ] `WBP_ProgrammingDeck` — Card selection view (9 cards in hand, 5 to registers)

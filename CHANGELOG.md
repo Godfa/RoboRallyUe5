@@ -4,6 +4,58 @@ All notable changes to the RobotRally UE5 project.
 
 ---
 
+## [0.5.0] - 2026-02-09
+
+### Wall System & Multiplayer Complete
+
+#### Added
+- **Wall System**
+  - Walls on tile edges (N/S/E/W) using bitfield storage (1 byte per tile)
+  - `HasWall()`, `SetWall()`, `IsMovementBlocked()` API in GridManager
+  - Visual wall meshes (dark gray, 50 units high, 5 units thick)
+  - Wall validation in movement system (robots stop at walls)
+  - Wall validation in push system (cannot push through walls)
+  - Wall validation in conveyor system (conveyors blocked by walls)
+  - Test map with perimeter walls and internal labyrinth
+  - Automatic network replication via FReplicatedTileEntry
+
+- **Multiplayer Support (LAN)**
+  - ARobotRallyGameState for replicated game state
+  - ARobotRallyPlayerState for per-player data (cards, robot reference)
+  - URobotRallyGameInstance for session management (host/join/find)
+  - Client-server architecture using OnlineSubsystem Null
+  - Server authoritative movement and tile effects
+  - Replicated robot list and grid tile overrides
+  - Network-conditional code (WASD disabled in network mode)
+  - RPC system for card selection and program commitment
+
+- **Robot Collision System**
+  - Robot-to-robot collision detection
+  - Chain pushing mechanics (recursive push validation)
+  - Push blocked by walls and out-of-bounds
+  - Robots can be pushed into hazards (pits, lasers)
+
+- **AI Controller Support**
+  - ARobotAIController base class
+  - Easy and Medium difficulty levels
+  - Auto-execution system for AI robots
+  - Framework for pathfinding (not yet implemented)
+
+#### Changed
+- Sequential robot execution (one robot moves at a time)
+- Priority-based execution order for multiple robots
+- GridManager now replicates to clients
+- Movement validation checks walls before collision
+- Conveyor system respects wall boundaries
+
+#### Technical
+- Wall storage: uint8 bitfield (4 bits for N/E/S/W walls)
+- Network: Server authoritative, client prediction
+- Grid replication: TArray<FReplicatedTileEntry> for bandwidth efficiency
+- Wall mesh key: X + Y*1000 + Direction*1000000
+
+---
+
 ## [0.4.0] - 2026-02-08
 
 ### Phase 3 Complete: Player Control & Lives System
@@ -153,8 +205,9 @@ All notable changes to the RobotRally UE5 project.
 | Phase 2: Card System | ✅ Complete | 0.3.0 |
 | Phase 3: Player Control | ✅ Complete | 0.4.0 |
 | Phase 4: Field Hazards | ✅ Complete | 0.4.0 |
-| Phase 5: UI/UMG | ⚠️ Partial | — |
-| Phase 6: Content & Polish | ❌ Not Started | — |
+| Phase 5: Multiplayer & Walls | ✅ Complete | 0.5.0 |
+| Phase 6: UI/UMG | ⚠️ Partial | — |
+| Phase 7: Content & Polish | ❌ Not Started | — |
 
 ---
 
@@ -166,39 +219,40 @@ All notable changes to the RobotRally UE5 project.
 - Rapid card execution may cause movement overlap (mitigated with timers)
 
 ### Limitations
-- Single-player only (no multi-robot support)
-- No robot-robot collision
 - No UI/UMG widgets (using Canvas HUD)
-- No board walls or obstacles
 - No sound effects or particle effects
+- AI pathfinding not yet implemented (framework exists)
+- No repair stations or gear tiles
+- No register locking (damage reduces hand size only)
 
 ---
 
 ## Upcoming Features
 
-### Phase 5: UI/UMG
+### Phase 6: UI/UMG
 - Mouse-driven card selection
 - Drag-and-drop register programming
 - Modern widget-based HUD
 - Card tooltips and descriptions
 - Game over screen with restart button
+- Lobby screen for multiplayer
 
-### Phase 6: Content & Polish
+### Phase 7: Content & Polish
 - Multiple board layouts
 - Board editor/designer
 - Repair stations (heal damage)
+- Gear tiles (rotate robots)
+- Power down system (skip turn to heal)
+- Register locking (damage locks specific registers)
 - Flags (alternative checkpoints)
-- Walls and obstacles
-- Robot-robot collision and pushing
 - Sound effects and visual effects
 - Main menu and settings
 
 ### Future Enhancements
-- Multiplayer (2-8 robots)
-- AI opponents
+- AI pathfinding and smart checkpoint navigation
 - Custom card decks
 - Campaign mode
-- Online leaderboards
+- Online matchmaking (beyond LAN)
 
 ---
 

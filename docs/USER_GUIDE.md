@@ -1,7 +1,7 @@
 # RobotRally User Guide
 
-**Version**: 0.4 (Phase 3 Complete)
-**Last Updated**: 2026-02-08
+**Version**: 0.5 (Phase 5 Complete - Multiplayer & Walls)
+**Last Updated**: 2026-02-09
 
 ---
 
@@ -182,17 +182,17 @@ Registers: [Move1-540] [RotateR-230] [ ] [ ] [ ]
 
 ### Card Priority Explained
 
-In multiplayer (not yet implemented), **higher priority cards execute first** each register.
+In multiplayer, **higher priority cards execute first** each register.
 
 Example:
 ```
 Robot A: Move1-540
 Robot B: Move1-490
 
-Execution order: A moves, then B moves
+Execution order: A moves, then B moves (540 > 490)
 ```
 
-*Currently*, priority doesn't matter since there's only one robot.
+Priority becomes critical when multiple robots compete for the same tile or push each other.
 
 ---
 
@@ -240,6 +240,31 @@ Execution order: A moves, then B moves
 - **Rule**: Must touch in order (1 → 2 → 3...)
 - **Result**: Saves respawn point, updates HUD
 - **Victory**: Touching last checkpoint wins the game
+
+### Obstacles
+
+#### Walls (Dark gray barriers)
+- **Location**: On tile **edges** (not tiles themselves)
+- **Effect**: Blocks movement between tiles
+- **Directions**: Can be on North, South, East, or West edge of any tile
+- **Impact**:
+  - Robots cannot move through walls
+  - Cannot push robots through walls
+  - Conveyors cannot push robots through walls
+- **Strategy**:
+  - Walls create maze-like paths to checkpoints
+  - Plan routes around walls
+  - Partial movement: Move3 blocked after 1 tile = only Move1 happens
+- **Visual**: Thin dark gray meshes at tile boundaries, 50 units tall
+
+**Example**:
+```
+[Normal] | Wall | [Normal]
+         ^
+         Blocks movement left/right
+```
+
+If you try to move from left tile to right tile, you'll be blocked by the wall.
 
 ---
 
@@ -289,6 +314,34 @@ Good program:
 → Turn early, then move in safe direction
 → Fewer chances to hit hazards mid-sequence
 ```
+
+#### Robot Collision & Pushing (Multiplayer)
+```
+Scenario:
+[RobotA] → [RobotB] → [Empty]
+
+If Robot A moves forward:
+→ Robot A pushes Robot B
+→ Robot B moves to Empty tile
+→ Robot A moves to where B was
+
+Chain pushing:
+[RobotA] → [RobotB] → [RobotC] → [Empty]
+→ A pushes B, B pushes C, C moves to Empty
+→ All robots shift one tile
+
+Blocked push:
+[RobotA] → [RobotB] → [Wall/Pit]
+→ Robot B cannot be pushed (blocked)
+→ Robot A doesn't move either
+```
+
+**Pushing Rules**:
+- Robots can push other robots in their movement direction
+- Chain pushing supported (up to grid size)
+- Cannot push through walls
+- Can push robots into hazards (strategic!)
+- Higher priority robots move first (avoid being pushed!)
 
 ---
 

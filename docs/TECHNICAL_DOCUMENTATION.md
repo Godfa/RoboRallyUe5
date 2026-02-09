@@ -1,7 +1,7 @@
 # RobotRally Technical Documentation
 
-**Version**: Phase 3 Complete
-**Last Updated**: 2026-02-08
+**Version**: Phase 5 Complete
+**Last Updated**: 2026-02-09
 **Engine**: Unreal Engine 5.7
 
 ---
@@ -22,13 +22,16 @@
 
 RobotRally is a digital adaptation of the board game where players program robots using movement cards to navigate a hazardous factory floor. The current implementation supports:
 
-- ✅ Single-player robot control
+- ✅ Multiplayer (LAN, 2-8 players) with server-client architecture
 - ✅ Grid-based movement system with smooth interpolation
+- ✅ Wall system on tile edges (blocks movement and pushing)
+- ✅ Robot collision detection and chain pushing mechanics
 - ✅ Card programming system (5 registers, 9-card hand)
 - ✅ Tile hazards (pits, lasers, conveyors, checkpoints)
 - ✅ Health and lives system with respawn
 - ✅ Win/lose conditions
 - ✅ On-screen HUD with event log
+- ✅ AI controller framework (Easy/Medium difficulty)
 
 ### Implementation Status
 
@@ -39,8 +42,9 @@ RobotRally is a digital adaptation of the board game where players program robot
 | Phase 2: Card System | ✅ Complete | 100% |
 | Phase 3: Player Control | ✅ Complete | 100% |
 | Phase 4: Field Hazards | ✅ Complete | 100% |
-| Phase 5: UI/UMG Widgets | ⚠️ Partial | 25% |
-| Phase 6: Content & Polish | ❌ Not Started | 0% |
+| Phase 5: Multiplayer & Walls | ✅ Complete | 100% |
+| Phase 6: UI/UMG Widgets | ⚠️ Partial | 25% |
+| Phase 7: Content & Polish | ❌ Not Started | 0% |
 
 ---
 
@@ -273,8 +277,29 @@ struct FTileData
 {
     ETileType TileType;        // Tile type enum
     int32 CheckpointNumber;    // Checkpoint ID (1-based), 0 for non-checkpoints
+    uint8 Walls;               // Wall bitfield (bit 0=North, 1=East, 2=South, 3=West)
 };
 ```
+
+#### Wall System
+
+Walls exist on **tile edges** (not tiles themselves) and block movement between adjacent tiles.
+
+**Wall Bit Flags**:
+```cpp
+static constexpr uint8 WALL_NORTH = 1 << 0;  // bit 0
+static constexpr uint8 WALL_EAST  = 1 << 1;  // bit 1
+static constexpr uint8 WALL_SOUTH = 1 << 2;  // bit 2
+static constexpr uint8 WALL_WEST  = 1 << 3;  // bit 3
+```
+
+**Storage**: Each tile stores walls on its edges using a single byte (4 bits used). This approach:
+- Uses minimal memory (1 byte per tile)
+- Provides O(1) wall lookups
+- Replicates efficiently over network
+- Allows dynamic wall placement/removal
+
+**Visual Representation**: Wall meshes are spawned as thin cubes (5 units thick, 50 units high) positioned at tile boundaries. Color: dark gray (RGB 0.15).
 
 #### Key Methods
 
@@ -283,11 +308,15 @@ struct FTileData
 | `GridToWorld(FIntVector)` | Converts grid coords to world location |
 | `WorldToGrid(FVector)` | Converts world location to grid coords |
 | `GetTileType(FIntVector)` | Returns tile type at coordinates |
-| `GetTileData(FIntVector)` | Returns full tile data (type + checkpoint) |
+| `GetTileData(FIntVector)` | Returns full tile data (type + checkpoint + walls) |
 | `IsInBounds(int32, int32)` | Checks if coords are within grid boundaries |
 | `IsValidTile(FIntVector)` | Returns true if in-bounds and not a pit |
 | `SetTileType(FIntVector, FTileData)` | Updates tile and refreshes visual |
 | `GetTotalCheckpoints()` | Counts total checkpoint tiles on board |
+| `HasWall(FIntVector, EGridDirection)` | Checks if wall exists on tile edge |
+| `SetWall(FIntVector, EGridDirection, bool)` | Adds/removes wall on tile edge |
+| `IsMovementBlocked(FIntVector, FIntVector)` | Checks if wall blocks movement between tiles |
+| `RefreshAllWallVisuals()` | Rebuilds all wall meshes from wall data |
 
 #### Coordinate System
 
@@ -562,7 +591,87 @@ void ReachCheckpoint(int32 Number)
 
 ---
 
-### 4. Health & Lives System
+### 4. Wall System
+
+#### Wall Placement
+
+Walls exist on **tile edges**, not tiles themselves. Each tile stores which of its 4 edges have walls.
+
+```cpp
+// Add perimeter walls around the board
+for (int32 x = 0; x < 10; ++x)
+{
+    GridManager->SetWall(FIntVector(x, 0, 0), EGridDirection::West, true);
+    GridManager->SetWall(FIntVector(x, 9, 0), EGridDirection::East, true);
+}
+
+// Add internal wall
+GridManager->SetWall(FIntVector(4, 3, 0), EGridDirection::North, true);
+```
+
+#### Movement Validation
+
+Before each movement step, the system checks:
+1. **From-tile side**: Does the starting tile have a wall in the movement direction?
+2. **To-tile side**: Does the destination tile have a wall in the opposite direction?
+3. **Result**: If either has a wall, movement is blocked
+
+```cpp
+bool IsMovementBlocked(FIntVector From, FIntVector To)
+{
+    // Calculate direction (DX, DY)
+    int32 DX = To.X - From.X;
+    int32 DY = To.Y - From.Y;
+
+    // Must be adjacent tiles
+    if (FMath::Abs(DX) + FMath::Abs(DY) != 1) return false;
+
+    // Check wall on from-tile side
+    if (HasWall(From, Direction)) return true;
+
+    // Check wall on to-tile side (opposite direction)
+    if (HasWall(To, OppositeDirection)) return true;
+
+    return false;
+}
+```
+
+#### Wall Effects on Game Systems
+
+**Robot Movement**:
+- `MoveInGrid()` checks walls before each step
+- Partial movement allowed (Move3 blocked after 1 tile = Move1)
+- Log message: "Blocked by wall between (X1,Y1) and (X2,Y2)"
+
+**Robot Pushing**:
+- `TryPushRobot()` validates destination is wall-free
+- Chain pushing stops at walls
+- Robots cannot be pushed through walls
+
+**Conveyor Belts**:
+- `ProcessRobotConveyors()` checks walls before movement
+- Blocked conveyors show message: "R0 blocked by wall on conveyor"
+- Robot stays on conveyor tile if blocked
+
+#### Network Replication
+
+Walls automatically replicate via existing `FReplicatedTileEntry` system:
+```cpp
+struct FReplicatedTileEntry
+{
+    int32 X;
+    int32 Y;
+    ETileType TileType;
+    int32 CheckpointNumber;
+    uint8 Walls;  // Replicates automatically
+};
+```
+
+Server sets walls → GameState replicates → Clients call `RefreshAllWallVisuals()`
+
+---
+
+### 5. Health & Lives System
 
 #### Damage Sources
 
@@ -602,7 +711,7 @@ Lives > 0?
 
 ---
 
-### 5. Win/Lose Conditions
+### 6. Win/Lose Conditions
 
 #### Win Condition
 
@@ -752,15 +861,10 @@ if (Robot->Lives <= 0 && !Robot->bIsAlive) {
 
 ### Not Yet Implemented
 
-#### Multi-Robot Support
-- **Issue**: Only single TestRobot exists
-- **Impact**: Cannot test priority-based execution order
-- **Required for**: Phase 4 completion (priority execution)
-
-#### Robot-Robot Collision
-- **Issue**: Robots pass through each other
-- **Impact**: Cannot push other robots or block movement
-- **Required for**: Advanced board tactics
+#### AI Pathfinding
+- **Issue**: AI controllers exist but use random card selection
+- **Impact**: AI robots don't navigate to checkpoints intelligently
+- **Required for**: Challenging AI opponents
 
 #### UI/UMG Widgets
 - **Issue**: HUD uses DrawHUD (Canvas API), not UMG
@@ -772,10 +876,10 @@ if (Robot->Lives <= 0 && !Robot->bIsAlive) {
 - **Impact**: New players must memorize card types
 - **Enhancement**: Add hover tooltips to HUD cards
 
-#### Board Obstacles
-- **Issue**: No walls, pushers, crushers
-- **Impact**: Limited board variety
-- **Required for**: Phase 6 (full board element set)
+#### Additional Board Elements
+- **Issue**: No gear tiles, repair stations, pushers, crushers
+- **Impact**: Missing some classic Robot Rally mechanics
+- **Required for**: Phase 7 (full board element set)
 
 #### Board Lasers
 - **Issue**: Fixed lasers exist, but no board-mounted lasers
