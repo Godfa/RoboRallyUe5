@@ -162,6 +162,16 @@ bool URobotMovementComponent::TryPushRobot(ARobotPawn* RobotToPush, int32 DX, in
 			UE_LOG(LogTemp, Log, TEXT("TryPushRobot: Cannot push - out of bounds at (%d, %d)"), PushX, PushY);
 			return false;
 		}
+
+		// Check if wall blocks the push
+		FIntVector CurrentCoords(RobotToPush->GridX, RobotToPush->GridY, 0);
+		FIntVector PushCoords(PushX, PushY, 0);
+		if (GridManager->IsMovementBlocked(CurrentCoords, PushCoords))
+		{
+			UE_LOG(LogTemp, Log, TEXT("TryPushRobot: Cannot push - wall blocks movement from (%d, %d) to (%d, %d)"),
+				RobotToPush->GridX, RobotToPush->GridY, PushX, PushY);
+			return false;
+		}
 	}
 
 	// Check if another robot is blocking the push destination
@@ -210,6 +220,19 @@ void URobotMovementComponent::MoveInGrid(int32 Distance)
 	{
 		int32 NextX = CurrentGridX + DX * StepDir * Step;
 		int32 NextY = CurrentGridY + DY * StepDir * Step;
+
+		// Check for walls blocking movement
+		if (GridManager)
+		{
+			FIntVector CurrentCoords(CurrentGridX + DX * StepDir * (Step - 1), CurrentGridY + DY * StepDir * (Step - 1), 0);
+			FIntVector NextCoords(NextX, NextY, 0);
+			if (GridManager->IsMovementBlocked(CurrentCoords, NextCoords))
+			{
+				UE_LOG(LogTemp, Log, TEXT("MoveInGrid: Blocked by wall between (%d, %d) and (%d, %d) after %d valid steps"),
+					CurrentCoords.X, CurrentCoords.Y, NextX, NextY, ValidSteps);
+				break;
+			}
+		}
 
 		// Check for robot collision and try to push
 		ARobotPawn* BlockingRobot = FindRobotAtPosition(NextX, NextY);

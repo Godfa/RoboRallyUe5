@@ -8,6 +8,9 @@
 #include "Components/TextRenderComponent.h"
 #include "GridManager.generated.h"
 
+// Forward declare EGridDirection (defined in RobotMovementComponent.h)
+enum class EGridDirection : uint8;
+
 UENUM(BlueprintType)
 enum class ETileType : uint8
 {
@@ -21,6 +24,12 @@ enum class ETileType : uint8
 	Checkpoint
 };
 
+// Wall bit flags for FTileData
+static constexpr uint8 WALL_NORTH = 1 << 0;  // bit 0
+static constexpr uint8 WALL_EAST  = 1 << 1;  // bit 1
+static constexpr uint8 WALL_SOUTH = 1 << 2;  // bit 2
+static constexpr uint8 WALL_WEST  = 1 << 3;  // bit 3
+
 USTRUCT(BlueprintType)
 struct FTileData
 {
@@ -31,6 +40,10 @@ struct FTileData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 CheckpointNumber = 0;
+
+	// Wall flags (bit 0=North, 1=East, 2=South, 3=West)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	uint8 Walls = 0;
 };
 
 UCLASS()
@@ -112,6 +125,22 @@ public:
 	// Get yaw rotation for conveyor arrow
 	static float GetConveyorYaw(ETileType Type);
 
+	// Wall System API
+	// Check if a wall exists on a specific edge of a tile
+	UFUNCTION(BlueprintPure, Category = "Grid|Walls")
+	bool HasWall(FIntVector Coords, EGridDirection Direction) const;
+
+	// Set or remove a wall on a specific edge of a tile
+	UFUNCTION(BlueprintCallable, Category = "Grid|Walls")
+	void SetWall(FIntVector Coords, EGridDirection Direction, bool bEnabled);
+
+	// Check if movement between two tiles is blocked by a wall
+	UFUNCTION(BlueprintPure, Category = "Grid|Walls")
+	bool IsMovementBlocked(FIntVector FromCoords, FIntVector ToCoords) const;
+
+	// Refresh all wall visuals from current GridMap state
+	void RefreshAllWallVisuals();
+
 private:
 	void InitializeGrid();
 	void SpawnTileMesh(FIntVector Coords, const FTileData& Data);
@@ -121,6 +150,15 @@ private:
 	void DestroyCheckpointLabel(FIntVector Coords);
 	void CreateBaseMaterial();
 
+	// Wall visual helpers
+	void SpawnWallMesh(FIntVector Coords, EGridDirection Direction);
+	void RefreshWallVisual(FIntVector Coords);
+	FVector GetWallOffset(EGridDirection Direction) const;
+	FRotator GetWallRotation(EGridDirection Direction) const;
+	FVector GetWallScale() const;
+	uint8 DirectionToWallFlag(EGridDirection Direction) const;
+	EGridDirection GetOppositeDirection(EGridDirection Direction) const;
+
 	UPROPERTY()
 	TMap<FIntVector, UStaticMeshComponent*> TileMeshes;
 
@@ -129,6 +167,11 @@ private:
 
 	UPROPERTY()
 	TMap<FIntVector, UTextRenderComponent*> CheckpointLabels;
+
+	// Wall meshes stored by (Coords, Direction) - use a combined key
+	// Key format: X + Y*1000 + DirectionBit*1000000
+	UPROPERTY()
+	TMap<int32, UStaticMeshComponent*> WallMeshes;
 
 	UPROPERTY()
 	USceneComponent* SceneRoot;
@@ -141,4 +184,15 @@ private:
 
 	UPROPERTY()
 	UMaterialInterface* CachedBaseMaterial;
+
+	// Customizable wall mesh (falls back to CachedCubeMesh if not set)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Grid|Walls", meta = (AllowPrivateAccess = "true"))
+	UStaticMesh* WallMeshAsset;
+
+	// Wall dimensions
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Grid|Walls", meta = (AllowPrivateAccess = "true"))
+	float WallHeight = 50.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Grid|Walls", meta = (AllowPrivateAccess = "true"))
+	float WallThickness = 5.0f;
 };

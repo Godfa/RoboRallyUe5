@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Robot Rally Team. All Rights Reserved.
 
 #include "GridManager.h"
+#include "RobotMovementComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -98,6 +99,7 @@ void AGridManager::InitializeGrid()
 		CachedBaseMaterial ? TEXT("OK") : TEXT("NULL"));
 
 	RefreshAllTileVisuals();
+	RefreshAllWallVisuals();
 }
 
 FVector AGridManager::GridToWorld(FIntVector Coords) const
@@ -417,4 +419,247 @@ FLinearColor AGridManager::GetTileColor(ETileType Type)
 	case ETileType::Checkpoint:    return FLinearColor(0.8f, 0.7f, 0.1f);
 	default:                       return FLinearColor::White;
 	}
+}
+
+// Wall System Implementation
+
+uint8 AGridManager::DirectionToWallFlag(EGridDirection Direction) const
+{
+	switch (Direction)
+	{
+	case EGridDirection::North: return WALL_NORTH;
+	case EGridDirection::East:  return WALL_EAST;
+	case EGridDirection::South: return WALL_SOUTH;
+	case EGridDirection::West:  return WALL_WEST;
+	default:                    return 0;
+	}
+}
+
+EGridDirection AGridManager::GetOppositeDirection(EGridDirection Direction) const
+{
+	switch (Direction)
+	{
+	case EGridDirection::North: return EGridDirection::South;
+	case EGridDirection::East:  return EGridDirection::West;
+	case EGridDirection::South: return EGridDirection::North;
+	case EGridDirection::West:  return EGridDirection::East;
+	default:                    return EGridDirection::North;
+	}
+}
+
+bool AGridManager::HasWall(FIntVector Coords, EGridDirection Direction) const
+{
+	const FTileData* Data = GridMap.Find(Coords);
+	if (!Data) return false;
+
+	uint8 WallFlag = DirectionToWallFlag(Direction);
+	return (Data->Walls & WallFlag) != 0;
+}
+
+void AGridManager::SetWall(FIntVector Coords, EGridDirection Direction, bool bEnabled)
+{
+	if (!IsInBounds(Coords.X, Coords.Y))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SetWall: Coordinates (%d, %d) out of bounds"), Coords.X, Coords.Y);
+		return;
+	}
+
+	FTileData& Data = GridMap.FindOrAdd(Coords);
+	uint8 WallFlag = DirectionToWallFlag(Direction);
+
+	if (bEnabled)
+	{
+		Data.Walls |= WallFlag;  // Set bit
+	}
+	else
+	{
+		Data.Walls &= ~WallFlag;  // Clear bit
+	}
+
+	// Update visual
+	RefreshWallVisual(Coords);
+}
+
+bool AGridManager::IsMovementBlocked(FIntVector FromCoords, FIntVector ToCoords) const
+{
+	// Calculate movement direction
+	int32 DX = ToCoords.X - FromCoords.X;
+	int32 DY = ToCoords.Y - FromCoords.Y;
+
+	// Not adjacent tiles - no wall blocking (diagonal/invalid movement)
+	if (FMath::Abs(DX) + FMath::Abs(DY) != 1)
+	{
+		return false;
+	}
+
+	// Determine direction
+	EGridDirection Direction;
+	if (DX == 1 && DY == 0)       Direction = EGridDirection::North;
+	else if (DX == -1 && DY == 0) Direction = EGridDirection::South;
+	else if (DX == 0 && DY == 1)  Direction = EGridDirection::East;
+	else if (DX == 0 && DY == -1) Direction = EGridDirection::West;
+	else return false;
+
+	// Check wall on the from-tile side
+	if (HasWall(FromCoords, Direction))
+	{
+		return true;
+	}
+
+	// Check wall on the to-tile side (opposite direction)
+	EGridDirection OppositeDir = GetOppositeDirection(Direction);
+	if (HasWall(ToCoords, OppositeDir))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+FVector AGridManager::GetWallOffset(EGridDirection Direction) const
+{
+	float HalfTile = TileSize / 2.0f;
+	switch (Direction)
+	{
+	case EGridDirection::North: return FVector(HalfTile, 0.0f, WallHeight / 2.0f);
+	case EGridDirection::South: return FVector(-HalfTile, 0.0f, WallHeight / 2.0f);
+	case EGridDirection::East:  return FVector(0.0f, HalfTile, WallHeight / 2.0f);
+	case EGridDirection::West:  return FVector(0.0f, -HalfTile, WallHeight / 2.0f);
+	default:                    return FVector::ZeroVector;
+	}
+}
+
+FRotator AGridManager::GetWallRotation(EGridDirection Direction) const
+{
+	switch (Direction)
+	{
+	case EGridDirection::North:
+	case EGridDirection::South:
+		return FRotator(0.0f, 0.0f, 0.0f);  // Default orientation
+	case EGridDirection::East:
+	case EGridDirection::West:
+		return FRotator(0.0f, 90.0f, 0.0f);  // Rotated 90 degrees
+	default:
+		return FRotator::ZeroRotator;
+	}
+}
+
+FVector AGridManager::GetWallScale() const
+{
+	// Wall dimensions: length = TileSize, thickness = WallThickness, height = WallHeight
+	// Cube default is 100x100x100, so scale accordingly
+	float LengthScale = TileSize / 100.0f;
+	float ThicknessScale = WallThickness / 100.0f;
+	float HeightScale = WallHeight / 100.0f;
+	return FVector(ThicknessScale, LengthScale, HeightScale);
+}
+
+void AGridManager::SpawnWallMesh(FIntVector Coords, EGridDirection Direction)
+{
+	UStaticMesh* MeshToUse = WallMeshAsset ? WallMeshAsset : CachedCubeMesh;
+	if (!MeshToUse)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnWallMesh: No mesh available"));
+		return;
+	}
+
+	// Create unique key for this wall (Coords + Direction)
+	int32 WallKey = Coords.X + Coords.Y * 1000 + static_cast<int32>(Direction) * 1000000;
+
+	// Check if wall already exists
+	if (WallMeshes.Contains(WallKey))
+	{
+		return;  // Already exists
+	}
+
+	// Create wall mesh component
+	FString CompName = FString::Printf(TEXT("Wall_%d_%d_%d"), Coords.X, Coords.Y, static_cast<int32>(Direction));
+	UStaticMeshComponent* WallMesh = NewObject<UStaticMeshComponent>(this, FName(*CompName));
+	WallMesh->SetupAttachment(RootComponent);
+	WallMesh->SetStaticMesh(MeshToUse);
+
+	// Position at tile edge
+	FVector TilePos(Coords.X * TileSize, Coords.Y * TileSize, 0.0f);
+	FVector WallPos = TilePos + GetWallOffset(Direction);
+	WallMesh->SetRelativeLocation(WallPos);
+
+	// Rotate for direction
+	WallMesh->SetRelativeRotation(GetWallRotation(Direction));
+
+	// Scale to wall dimensions
+	WallMesh->SetRelativeScale3D(GetWallScale());
+
+	// Dark gray material
+	if (CachedBaseMaterial)
+	{
+		UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(CachedBaseMaterial, this);
+		MID->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.15f, 0.15f, 0.15f));
+		WallMesh->SetMaterial(0, MID);
+	}
+
+	WallMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	WallMesh->RegisterComponent();
+
+	WallMeshes.Add(WallKey, WallMesh);
+}
+
+void AGridManager::RefreshWallVisual(FIntVector Coords)
+{
+	if (!IsInBounds(Coords.X, Coords.Y)) return;
+
+	const FTileData* Data = GridMap.Find(Coords);
+	if (!Data) return;
+
+	// Check each direction and spawn/destroy walls as needed
+	for (int32 i = 0; i < 4; ++i)
+	{
+		EGridDirection Dir = static_cast<EGridDirection>(i);
+		int32 WallKey = Coords.X + Coords.Y * 1000 + i * 1000000;
+
+		bool bShouldHaveWall = (Data->Walls & DirectionToWallFlag(Dir)) != 0;
+		bool bHasWallMesh = WallMeshes.Contains(WallKey);
+
+		if (bShouldHaveWall && !bHasWallMesh)
+		{
+			// Spawn wall
+			SpawnWallMesh(Coords, Dir);
+		}
+		else if (!bShouldHaveWall && bHasWallMesh)
+		{
+			// Destroy wall
+			if (UStaticMeshComponent* WallMesh = WallMeshes[WallKey])
+			{
+				WallMesh->DestroyComponent();
+			}
+			WallMeshes.Remove(WallKey);
+		}
+	}
+}
+
+void AGridManager::RefreshAllWallVisuals()
+{
+	// Destroy all existing walls
+	for (auto& Pair : WallMeshes)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->DestroyComponent();
+		}
+	}
+	WallMeshes.Empty();
+
+	// Spawn walls for all tiles
+	for (auto& TilePair : GridMap)
+	{
+		const FIntVector& Coords = TilePair.Key;
+		const FTileData& Data = TilePair.Value;
+
+		// Check each direction
+		if (Data.Walls & WALL_NORTH) SpawnWallMesh(Coords, EGridDirection::North);
+		if (Data.Walls & WALL_EAST)  SpawnWallMesh(Coords, EGridDirection::East);
+		if (Data.Walls & WALL_SOUTH) SpawnWallMesh(Coords, EGridDirection::South);
+		if (Data.Walls & WALL_WEST)  SpawnWallMesh(Coords, EGridDirection::West);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("GridManager: Spawned %d wall meshes"), WallMeshes.Num());
 }

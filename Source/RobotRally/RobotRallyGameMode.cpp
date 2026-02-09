@@ -294,6 +294,34 @@ void ARobotRallyGameMode::SetupTestScene()
 		GridManagerInstance->SetTileType(FIntVector(6, 5, 0), LaserData);
 		GridManagerInstance->SetTileType(FIntVector(6, 6, 0), LaserData);
 
+		// Add perimeter walls (test walls around the board edges)
+		for (int32 x = 0; x < 10; ++x)
+		{
+			GridManagerInstance->SetWall(FIntVector(x, 0, 0), EGridDirection::West, true);    // South edge
+			GridManagerInstance->SetWall(FIntVector(x, 9, 0), EGridDirection::East, true);    // North edge
+		}
+		for (int32 y = 0; y < 10; ++y)
+		{
+			GridManagerInstance->SetWall(FIntVector(0, y, 0), EGridDirection::South, true);   // West edge
+			GridManagerInstance->SetWall(FIntVector(9, y, 0), EGridDirection::North, true);   // East edge
+		}
+
+		// Add internal labyrinth walls (test maze)
+		// Vertical wall at (4, 3-5)
+		GridManagerInstance->SetWall(FIntVector(4, 3, 0), EGridDirection::North, true);
+		GridManagerInstance->SetWall(FIntVector(4, 4, 0), EGridDirection::North, true);
+		GridManagerInstance->SetWall(FIntVector(4, 5, 0), EGridDirection::North, true);
+
+		// Horizontal wall at (6-7, 2)
+		GridManagerInstance->SetWall(FIntVector(6, 2, 0), EGridDirection::East, true);
+		GridManagerInstance->SetWall(FIntVector(7, 2, 0), EGridDirection::East, true);
+
+		// Small room at (2, 5)
+		GridManagerInstance->SetWall(FIntVector(2, 5, 0), EGridDirection::North, true);
+		GridManagerInstance->SetWall(FIntVector(2, 5, 0), EGridDirection::East, true);
+		GridManagerInstance->SetWall(FIntVector(2, 6, 0), EGridDirection::North, true);
+		GridManagerInstance->SetWall(FIntVector(3, 5, 0), EGridDirection::East, true);
+
 		// Spawn robots with controllers using the new spawn system
 		SpawnRobotsWithControllers();
 		StartProgrammingPhase();
@@ -588,6 +616,14 @@ void ARobotRallyGameMode::ProcessRobotConveyors(ARobotPawn* Robot)
 	}
 
 	FIntVector NewPos(CurrentPos.X + DX, CurrentPos.Y + DY, 0);
+
+	// Check if wall blocks conveyor movement
+	if (GridManagerInstance->IsMovementBlocked(CurrentPos, NewPos))
+	{
+		int32 RobotIndex = Robots.Find(Robot);
+		ShowEventMessage(FString::Printf(TEXT("R%d blocked by wall on conveyor"), RobotIndex), FColor::Yellow);
+		return;
+	}
 
 	if (GridManagerInstance->IsValidTile(NewPos))
 	{
