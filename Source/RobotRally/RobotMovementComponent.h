@@ -85,6 +85,12 @@ public:
 	// Returns (DX, DY) delta for a given direction
 	static void GetDirectionDelta(EGridDirection Dir, int32& OutDX, int32& OutDY);
 
+	// Check if another robot occupies the given grid position
+	class ARobotPawn* FindRobotAtPosition(int32 X, int32 Y) const;
+
+	// Try to push a robot in the given direction (returns true if successful)
+	bool TryPushRobot(class ARobotPawn* RobotToPush, int32 DX, int32 DY);
+
 	// Replicated targets for client interpolation
 	UPROPERTY(ReplicatedUsing = OnRep_TargetLocation)
 	FVector Rep_TargetLocation;

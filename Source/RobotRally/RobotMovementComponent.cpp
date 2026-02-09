@@ -2,9 +2,11 @@
 
 #include "RobotMovementComponent.h"
 #include "GridManager.h"
+#include "RobotPawn.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Net/UnrealNetwork.h"
+#include "EngineUtils.h"
 
 URobotMovementComponent::URobotMovementComponent()
 {
@@ -120,6 +122,73 @@ void URobotMovementComponent::InitializeGridPosition(int32 InGridX, int32 InGrid
 	Rep_TargetRotation = TargetRotation;
 }
 
+ARobotPawn* URobotMovementComponent::FindRobotAtPosition(int32 X, int32 Y) const
+{
+	UWorld* World = GetWorld();
+	if (!World) return nullptr;
+
+	ARobotPawn* OwnerRobot = Cast<ARobotPawn>(GetOwner());
+
+	// Search all robot pawns in the world
+	for (TActorIterator<ARobotPawn> It(World); It; ++It)
+	{
+		ARobotPawn* Robot = *It;
+		if (Robot && Robot != OwnerRobot && Robot->bIsAlive)
+		{
+			if (Robot->GridX == X && Robot->GridY == Y)
+			{
+				return Robot;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+bool URobotMovementComponent::TryPushRobot(ARobotPawn* RobotToPush, int32 DX, int32 DY)
+{
+	if (!RobotToPush || !RobotToPush->RobotMovement) return false;
+
+	// Calculate where the robot would be pushed to
+	int32 PushX = RobotToPush->GridX + DX;
+	int32 PushY = RobotToPush->GridY + DY;
+
+	// Check if push destination is in bounds
+	// (Pits and hazards are OK - that's the point of pushing!)
+	if (GridManager)
+	{
+		if (!GridManager->IsInBounds(PushX, PushY))
+		{
+			UE_LOG(LogTemp, Log, TEXT("TryPushRobot: Cannot push - out of bounds at (%d, %d)"), PushX, PushY);
+			return false;
+		}
+	}
+
+	// Check if another robot is blocking the push destination
+	ARobotPawn* BlockingRobot = FindRobotAtPosition(PushX, PushY);
+	if (BlockingRobot)
+	{
+		// Try to recursively push that robot (chain pushing)
+		if (!TryPushRobot(BlockingRobot, DX, DY))
+		{
+			UE_LOG(LogTemp, Log, TEXT("TryPushRobot: Cannot push - chain blocked"));
+			return false;
+		}
+	}
+
+	// Push successful - move the robot (even if it's into a pit/hazard!)
+	if (GridManager)
+	{
+		FVector PushWorldPos = GridManager->GridToWorld(FIntVector(PushX, PushY, 0));
+		RobotToPush->RobotMovement->MoveToWorldPosition(PushWorldPos);
+		RobotToPush->RobotMovement->SetGridPosition(PushX, PushY);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("TryPushRobot: Pushed robot from (%d, %d) to (%d, %d)"),
+		RobotToPush->GridX - DX, RobotToPush->GridY - DY, PushX, PushY);
+	return true;
+}
+
 void URobotMovementComponent::MoveInGrid(int32 Distance)
 {
 	if (bIsMoving)
@@ -142,6 +211,21 @@ void URobotMovementComponent::MoveInGrid(int32 Distance)
 		int32 NextX = CurrentGridX + DX * StepDir * Step;
 		int32 NextY = CurrentGridY + DY * StepDir * Step;
 
+		// Check for robot collision and try to push
+		ARobotPawn* BlockingRobot = FindRobotAtPosition(NextX, NextY);
+		if (BlockingRobot)
+		{
+			// Try to push the blocking robot in our movement direction
+			bool bPushSuccessful = TryPushRobot(BlockingRobot, DX * StepDir, DY * StepDir);
+			if (!bPushSuccessful)
+			{
+				UE_LOG(LogTemp, Log, TEXT("MoveInGrid: Blocked by robot at (%d, %d) after %d valid steps"), NextX, NextY, ValidSteps);
+				break;
+			}
+			// Push succeeded, continue moving
+		}
+
+		// Check for tile validity
 		if (GridManager)
 		{
 			FIntVector NextCoords(NextX, NextY, 0);
