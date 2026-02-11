@@ -8,6 +8,7 @@
 
 class ARobotRallyPlayerState;
 class ARobotRallyGameState;
+class URobotRallyMainWidget;
 
 USTRUCT()
 struct FEventMessage
@@ -25,9 +26,14 @@ class ROBOTRALLY_API ARobotRallyHUD : public AHUD
 	GENERATED_BODY()
 
 public:
+	virtual void BeginPlay() override;
 	virtual void DrawHUD() override;
 
 	void AddEventMessage(const FString& Text, FColor Color = FColor::White);
+
+	/** Widget class to create for main HUD (set in Blueprint or GameMode) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<URobotRallyMainWidget> MainWidgetClass;
 
 private:
 	void DrawCardSelection();
@@ -38,6 +44,13 @@ private:
 
 	// Helper: get GameState
 	ARobotRallyGameState* GetRobotRallyGameState() const;
+
+	/** Update widget data from PlayerState (network) or GameMode (standalone) */
+	void UpdateWidgetData();
+
+	/** Main widget instance (created in BeginPlay) */
+	UPROPERTY()
+	URobotRallyMainWidget* MainWidget;
 
 	TArray<FEventMessage> Messages;
 

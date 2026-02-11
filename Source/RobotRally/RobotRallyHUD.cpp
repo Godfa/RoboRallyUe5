@@ -5,9 +5,27 @@
 #include "RobotRallyGameMode.h"
 #include "RobotRallyGameState.h"
 #include "RobotRallyPlayerState.h"
+#include "UI/RobotRallyMainWidget.h"
+#include "UI/ProgrammingDeckWidget.h"
 #include "Engine/Canvas.h"
 #include "Engine/Font.h"
 #include "GameFramework/PlayerController.h"
+#include "Blueprint/UserWidget.h"
+
+void ARobotRallyHUD::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Create main widget if class is set
+	if (MainWidgetClass)
+	{
+		MainWidget = CreateWidget<URobotRallyMainWidget>(GetOwningPlayerController(), MainWidgetClass);
+		if (MainWidget)
+		{
+			MainWidget->AddToViewport();
+		}
+	}
+}
 
 ARobotRallyPlayerState* ARobotRallyHUD::GetLocalPlayerState() const
 {
@@ -32,6 +50,9 @@ ARobotRallyGameState* ARobotRallyHUD::GetRobotRallyGameState() const
 void ARobotRallyHUD::DrawHUD()
 {
 	Super::DrawHUD();
+
+	// Update widget data each frame (polls from PlayerState or GameMode)
+	UpdateWidgetData();
 
 	if (!Canvas) return;
 
@@ -406,6 +427,66 @@ void ARobotRallyHUD::DrawNetworkDebug()
 	Canvas->DrawItem(DebugItem);
 }
 
+void ARobotRallyHUD::UpdateWidgetData()
+{
+	if (!MainWidget || !MainWidget->ProgrammingDeck)
+	{
+		return;
+	}
+
+	bool bIsNetwork = (GetWorld()->GetNetMode() != NM_Standalone);
+
+	if (bIsNetwork)
+	{
+		// Network mode: Read from PlayerState (replicated data)
+		ARobotRallyPlayerState* PS = GetLocalPlayerState();
+		if (PS)
+		{
+			MainWidget->ProgrammingDeck->UpdateHandCards(PS->Rep_HandCards);
+			MainWidget->ProgrammingDeck->UpdateRegisterSlots(PS->Rep_RegisterSlots);
+
+			// Update other HUD elements from PlayerState->Robot
+			if (PS->Rep_Robot)
+			{
+				MainWidget->UpdateHealth(PS->Rep_Robot->Health, PS->Rep_Robot->MaxHealth);
+				MainWidget->UpdateLives(PS->Rep_Robot->Lives);
+				MainWidget->UpdateCheckpoints(PS->Rep_Robot->CurrentCheckpoint, 5); // TODO: get total from map
+			}
+
+			// Update game state from GameState
+			ARobotRallyGameState* GS = GetRobotRallyGameState();
+			if (GS)
+			{
+				MainWidget->UpdateGameState(GS->Rep_CurrentGameState);
+			}
+		}
+	}
+	else
+	{
+		// Standalone mode: Read from GameMode (authoritative data)
+		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+		if (GM && GM->RobotPrograms.Num() > 0)
+		{
+			// Get player's robot program (first robot in standalone)
+			FRobotProgram& PlayerProgram = GM->RobotPrograms[0];
+
+			MainWidget->ProgrammingDeck->UpdateHandCards(PlayerProgram.HandCards);
+			MainWidget->ProgrammingDeck->UpdateRegisterSlots(PlayerProgram.RegisterSlots);
+
+			// Update other HUD elements from Robot
+			if (PlayerProgram.Robot)
+			{
+				MainWidget->UpdateHealth(PlayerProgram.Robot->Health, PlayerProgram.Robot->MaxHealth);
+				MainWidget->UpdateLives(PlayerProgram.Robot->Lives);
+				MainWidget->UpdateCheckpoints(PlayerProgram.Robot->CurrentCheckpoint, 5);
+			}
+
+			// Update game state from GameMode
+			MainWidget->UpdateGameState(GM->CurrentState);
+		}
+	}
+}
+
 void ARobotRallyHUD::AddEventMessage(const FString& Text, FColor Color)
 {
 	FEventMessage Msg;
@@ -417,5 +498,11 @@ void ARobotRallyHUD::AddEventMessage(const FString& Text, FColor Color)
 	while (Messages.Num() > MAX_MESSAGES)
 	{
 		Messages.RemoveAt(0);
+	}
+
+	// Also forward to widget if available
+	if (MainWidget)
+	{
+		MainWidget->AddEventMessage(Text, FLinearColor(Color));
 	}
 }
