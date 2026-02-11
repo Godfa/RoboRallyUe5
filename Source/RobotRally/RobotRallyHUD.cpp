@@ -429,6 +429,29 @@ void ARobotRallyHUD::DrawNetworkDebug()
 
 void ARobotRallyHUD::UpdateWidgetData()
 {
+	if (!MainWidget)
+	{
+		return;
+	}
+
+	// Update programming deck if it exists
+	if (MainWidget->ProgrammingDeck)
+	{
+		UpdateProgrammingDeckData();
+	}
+
+	// Update other HUD elements
+	UpdateHealthAndStatusData();
+
+	// Override visibility if debug flag is set
+	if (bAlwaysShowDeck && MainWidget->ProgrammingDeck)
+	{
+		MainWidget->SetProgrammingDeckVisible(true);
+	}
+}
+
+void ARobotRallyHUD::UpdateProgrammingDeckData()
+{
 	if (!MainWidget || !MainWidget->ProgrammingDeck)
 	{
 		return;
@@ -444,8 +467,39 @@ void ARobotRallyHUD::UpdateWidgetData()
 		{
 			MainWidget->ProgrammingDeck->UpdateHandCards(PS->Rep_HandCards);
 			MainWidget->ProgrammingDeck->UpdateRegisterSlots(PS->Rep_RegisterSlots);
+		}
+	}
+	else
+	{
+		// Standalone mode: Read from GameMode (authoritative data)
+		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
+		if (GM && GM->RobotPrograms.Num() > 0)
+		{
+			// Get player's robot program (first robot in standalone)
+			FRobotProgram& PlayerProgram = GM->RobotPrograms[0];
 
-			// Update other HUD elements from PlayerState->Robot
+			MainWidget->ProgrammingDeck->UpdateHandCards(PlayerProgram.HandCards);
+			MainWidget->ProgrammingDeck->UpdateRegisterSlots(PlayerProgram.RegisterSlots);
+		}
+	}
+}
+
+void ARobotRallyHUD::UpdateHealthAndStatusData()
+{
+	if (!MainWidget)
+	{
+		return;
+	}
+
+	bool bIsNetwork = (GetWorld()->GetNetMode() != NM_Standalone);
+
+	if (bIsNetwork)
+	{
+		// Network mode: Read from PlayerState
+		ARobotRallyPlayerState* PS = GetLocalPlayerState();
+		if (PS)
+		{
+			// Update health, lives, checkpoints from Robot
 			if (PS->Rep_Robot)
 			{
 				MainWidget->UpdateHealth(PS->Rep_Robot->Health, PS->Rep_Robot->MaxHealth);
@@ -463,17 +517,13 @@ void ARobotRallyHUD::UpdateWidgetData()
 	}
 	else
 	{
-		// Standalone mode: Read from GameMode (authoritative data)
+		// Standalone mode: Read from GameMode
 		ARobotRallyGameMode* GM = Cast<ARobotRallyGameMode>(GetWorld()->GetAuthGameMode());
 		if (GM && GM->RobotPrograms.Num() > 0)
 		{
-			// Get player's robot program (first robot in standalone)
 			FRobotProgram& PlayerProgram = GM->RobotPrograms[0];
 
-			MainWidget->ProgrammingDeck->UpdateHandCards(PlayerProgram.HandCards);
-			MainWidget->ProgrammingDeck->UpdateRegisterSlots(PlayerProgram.RegisterSlots);
-
-			// Update other HUD elements from Robot
+			// Update health, lives, checkpoints from Robot
 			if (PlayerProgram.Robot)
 			{
 				MainWidget->UpdateHealth(PlayerProgram.Robot->Health, PlayerProgram.Robot->MaxHealth);
@@ -481,7 +531,7 @@ void ARobotRallyHUD::UpdateWidgetData()
 				MainWidget->UpdateCheckpoints(PlayerProgram.Robot->CurrentCheckpoint, 5);
 			}
 
-			// Update game state from GameMode
+			// Update game state from GameMode (this also controls deck visibility)
 			MainWidget->UpdateGameState(GM->CurrentState);
 		}
 	}

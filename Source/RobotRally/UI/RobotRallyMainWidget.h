@@ -97,4 +97,23 @@ public:
 	 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
 	void OnEventMessageAdded(const FString& Message, FLinearColor MessageColor);
+
+	/**
+	 * Update programming deck visibility based on game state
+	 * Show in Programming state, hide in Executing/GameOver
+	 * @param bVisible True to show deck, false to hide
+	 */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void SetProgrammingDeckVisible(bool bVisible);
+
+	/**
+	 * Get current visibility state of programming deck
+	 * @return True if deck is visible
+	 */
+	UFUNCTION(BlueprintPure, Category = "HUD")
+	bool IsProgrammingDeckVisible() const;
+
+private:
+	/** Current visibility state of programming deck */
+	bool bProgrammingDeckVisible = true;
 };

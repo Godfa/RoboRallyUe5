@@ -26,10 +26,32 @@ void URobotRallyMainWidget::UpdateGameState(EGameState NewState)
 {
 	// Trigger Blueprint event for visual update
 	OnGameStateChanged(NewState);
+
+	// Update programming deck visibility based on game state
+	// Show in Programming, hide in Executing/GameOver
+	bool bShouldShow = (NewState == EGameState::Programming);
+	SetProgrammingDeckVisible(bShouldShow);
 }
 
 void URobotRallyMainWidget::AddEventMessage(const FString& Message, FLinearColor MessageColor)
 {
 	// Trigger Blueprint event for visual update
 	OnEventMessageAdded(Message, MessageColor);
+}
+
+void URobotRallyMainWidget::SetProgrammingDeckVisible(bool bVisible)
+{
+	bProgrammingDeckVisible = bVisible;
+
+	if (ProgrammingDeck)
+	{
+		// Set visibility (Visible or Collapsed to maintain layout)
+		ESlateVisibility NewVisibility = bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+		ProgrammingDeck->SetVisibility(NewVisibility);
+	}
+}
+
+bool URobotRallyMainWidget::IsProgrammingDeckVisible() const
+{
+	return bProgrammingDeckVisible;
 }

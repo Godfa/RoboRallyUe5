@@ -35,6 +35,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<URobotRallyMainWidget> MainWidgetClass;
 
+	/** Always show programming deck regardless of game state (debug) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Debug")
+	bool bAlwaysShowDeck = false;
+
 private:
 	void DrawCardSelection();
 	void DrawNetworkDebug();
@@ -47,6 +51,12 @@ private:
 
 	/** Update widget data from PlayerState (network) or GameMode (standalone) */
 	void UpdateWidgetData();
+
+	/** Update programming deck widgets (hand and registers) */
+	void UpdateProgrammingDeckData();
+
+	/** Update health, lives, checkpoints, and game state widgets */
+	void UpdateHealthAndStatusData();
 
 	/** Main widget instance (created in BeginPlay) */
 	UPROPERTY()
