@@ -39,6 +39,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Debug")
 	bool bAlwaysShowDeck = false;
 
+	/** Use UMG widgets instead of Canvas drawing (Phase 5+) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	bool bUseUMGWidgets = true;
+
+	/** Show Canvas HUD even when UMG is active (useful during migration) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Debug")
+	bool bShowCanvasHUD = false;
+
 private:
 	void DrawCardSelection();
 	void DrawNetworkDebug();

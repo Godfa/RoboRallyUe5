@@ -52,7 +52,16 @@ void ARobotRallyHUD::DrawHUD()
 	Super::DrawHUD();
 
 	// Update widget data each frame (polls from PlayerState or GameMode)
-	UpdateWidgetData();
+	if (bUseUMGWidgets)
+	{
+		UpdateWidgetData();
+	}
+
+	// Skip Canvas drawing if UMG widgets are active (unless debug flag is set)
+	if (bUseUMGWidgets && !bShowCanvasHUD)
+	{
+		return;
+	}
 
 	if (!Canvas) return;
 

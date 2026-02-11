@@ -113,7 +113,58 @@ public:
 	UFUNCTION(BlueprintPure, Category = "HUD")
 	bool IsProgrammingDeckVisible() const;
 
+	/**
+	 * Get health percentage (0.0 to 1.0) for progress bar binding
+	 * @return Health percentage as float
+	 */
+	UFUNCTION(BlueprintPure, Category = "HUD|Health")
+	float GetHealthPercent() const;
+
+	/**
+	 * Get health bar color based on health percentage
+	 * Green (>70%), Yellow (30-70%), Red (<30%)
+	 * @return Color for health bar
+	 */
+	UFUNCTION(BlueprintPure, Category = "HUD|Health")
+	FLinearColor GetHealthBarColor() const;
+
+	/**
+	 * Get formatted health text ("7/10")
+	 * @return Formatted health string
+	 */
+	UFUNCTION(BlueprintPure, Category = "HUD|Health")
+	FText GetHealthText() const;
+
+	/**
+	 * Get game state display text ("PROGRAMMING", "EXECUTING", etc.)
+	 * @return Game state text
+	 */
+	UFUNCTION(BlueprintPure, Category = "HUD|GameState")
+	FText GetGameStateText() const;
+
+	/**
+	 * Get game state panel background color
+	 * Blue (Programming), Orange (Executing), Gold (Victory), Red (GameOver)
+	 * @return Background color for game state panel
+	 */
+	UFUNCTION(BlueprintPure, Category = "HUD|GameState")
+	FLinearColor GetGameStatePanelColor() const;
+
 private:
 	/** Current visibility state of programming deck */
 	bool bProgrammingDeckVisible = true;
+
+	/** Cached health values for helper methods */
+	int32 CachedCurrentHealth = 10;
+	int32 CachedMaxHealth = 10;
+
+	/** Cached lives value for helper methods */
+	int32 CachedLives = 3;
+
+	/** Cached checkpoint values for helper methods */
+	int32 CachedCurrentCheckpoint = 0;
+	int32 CachedTotalCheckpoints = 5;
+
+	/** Cached game state for helper methods */
+	EGameState CachedGameState = EGameState::Programming;
 };
