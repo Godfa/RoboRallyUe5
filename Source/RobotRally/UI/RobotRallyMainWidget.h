@@ -1,0 +1,100 @@
+// Copyright (c) 2026 Robot Rally Team. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "../RobotRallyGameMode.h"
+#include "RobotRallyMainWidget.generated.h"
+
+// Forward declarations
+class UProgrammingDeckWidget;
+
+/**
+ * Root HUD container widget
+ * Manages all UI elements: health, lives, checkpoints, game state, programming deck, event log
+ * Visual layout is implemented in Blueprint child class (WBP_MainHUD)
+ */
+UCLASS()
+class ROBOTRALLY_API URobotRallyMainWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	/** Programming deck widget (hand + registers) - bind in Blueprint with meta=(BindWidget) */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "HUD")
+	UProgrammingDeckWidget* ProgrammingDeck;
+
+	/**
+	 * Update health display
+	 * @param CurrentHealth Current health points
+	 * @param MaxHealth Maximum health points
+	 */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void UpdateHealth(int32 CurrentHealth, int32 MaxHealth);
+
+	/**
+	 * Update lives display
+	 * @param RemainingLives Number of lives remaining
+	 */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void UpdateLives(int32 RemainingLives);
+
+	/**
+	 * Update checkpoint progress display
+	 * @param CurrentCheckpoint Current checkpoint index
+	 * @param TotalCheckpoints Total number of checkpoints
+	 */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void UpdateCheckpoints(int32 CurrentCheckpoint, int32 TotalCheckpoints);
+
+	/**
+	 * Update game state display (Programming, Executing, GameOver)
+	 * @param NewState Current game state
+	 */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void UpdateGameState(EGameState NewState);
+
+	/**
+	 * Add event log message
+	 * @param Message Text to display
+	 * @param MessageColor Color for message text
+	 */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void AddEventMessage(const FString& Message, FLinearColor MessageColor);
+
+	/**
+	 * Blueprint event triggered when health changes
+	 * Implement in WBP_MainHUD to update health bar and text
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
+	void OnHealthChanged(int32 CurrentHealth, int32 MaxHealth);
+
+	/**
+	 * Blueprint event triggered when lives change
+	 * Implement in WBP_MainHUD to update heart icons
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
+	void OnLivesChanged(int32 RemainingLives);
+
+	/**
+	 * Blueprint event triggered when checkpoint progress changes
+	 * Implement in WBP_MainHUD to update flag icons
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
+	void OnCheckpointsChanged(int32 CurrentCheckpoint, int32 TotalCheckpoints);
+
+	/**
+	 * Blueprint event triggered when game state changes
+	 * Implement in WBP_MainHUD to update phase panel (color, text, icon)
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
+	void OnGameStateChanged(EGameState NewState);
+
+	/**
+	 * Blueprint event triggered when event message is added
+	 * Implement in WBP_MainHUD to create message widget with fade animation
+	 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "HUD")
+	void OnEventMessageAdded(const FString& Message, FLinearColor MessageColor);
+};

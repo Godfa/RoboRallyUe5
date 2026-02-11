@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>Move Back - Backward Arrow</title>
+  <!-- Single downward arrow -->
+  <path d="M 32 56 L 16 40 L 26 40 L 26 8 L 38 8 L 38 40 L 48 40 Z"
+        fill="white" stroke="none"/>
+</svg>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>U-Turn - 180 Degree Arrow</title>
+  <!-- U-shaped arrow -->
+  <path d="M 16 8 L 16 36
+           C 16 48 24 54 32 54
+           C 40 54 48 48 48 36
+           L 48 24
+           L 56 24 L 48 8 L 40 24 L 48 24
+           L 48 36
+           C 48 44 38 48 32 48
+           C 26 48 22 44 22 36
+           L 22 8 Z"
+        fill="white" stroke="none"/>
+</svg>

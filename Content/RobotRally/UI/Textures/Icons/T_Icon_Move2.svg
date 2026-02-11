@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>Move 2 - Double Forward Arrows</title>
+  <!-- Two upward arrows stacked -->
+  <path d="M 32 4 L 44 14 L 38 14 L 38 28 L 26 28 L 26 14 L 20 14 Z"
+        fill="white" stroke="none"/>
+  <path d="M 32 28 L 44 38 L 38 38 L 38 60 L 26 60 L 26 38 L 20 38 Z"
+        fill="white" stroke="none"/>
+</svg>

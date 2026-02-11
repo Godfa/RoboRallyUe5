@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>Rotate Right - Clockwise Arrow</title>
+  <!-- Clockwise curved arrow -->
+  <path d="M 32 8 L 48 16 L 44 20
+           C 44 20 50 26 50 32
+           C 50 44 42 52 32 52
+           C 22 52 14 44 14 32
+           C 14 24 18 18 24 14
+           L 28 20
+           C 24 22 20 26 20 32
+           C 20 40 26 46 32 46
+           C 38 46 44 40 44 32
+           C 44 28 42 26 40 24
+           L 36 28 Z"
+        fill="white" stroke="none"/>
+</svg>

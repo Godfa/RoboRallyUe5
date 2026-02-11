@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>Move 3 - Triple Forward Arrows</title>
+  <!-- Three upward arrows -->
+  <path d="M 32 2 L 42 10 L 38 10 L 38 20 L 26 20 L 26 10 L 22 10 Z"
+        fill="white" stroke="none"/>
+  <path d="M 32 20 L 42 28 L 38 28 L 38 40 L 26 40 L 26 28 L 22 28 Z"
+        fill="white" stroke="none"/>
+  <path d="M 32 40 L 42 48 L 38 48 L 38 62 L 26 62 L 26 48 L 22 48 Z"
+        fill="white" stroke="none"/>
+</svg>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <title>Rotate Left - Counter-Clockwise Arrow</title>
+  <!-- Counter-clockwise curved arrow (mirrored) -->
+  <path d="M 32 8 L 16 16 L 20 20
+           C 20 20 14 26 14 32
+           C 14 44 22 52 32 52
+           C 42 52 50 44 50 32
+           C 50 24 46 18 40 14
+           L 36 20
+           C 40 22 44 26 44 32
+           C 44 40 38 46 32 46
+           C 26 46 20 40 20 32
+           C 20 28 22 26 24 24
+           L 28 28 Z"
+        fill="white" stroke="none"/>
+</svg>
