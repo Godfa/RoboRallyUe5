@@ -9,6 +9,19 @@
 
 // Forward declarations
 class UProgrammingDeckWidget;
+class UVerticalBox;
+
+/**
+ * Event message types for color coding and icon selection
+ */
+UENUM(BlueprintType)
+enum class EEventMessageType : uint8
+{
+	Success		UMETA(DisplayName = "Success"),		// Green - Checkpoint collected, etc.
+	Warning		UMETA(DisplayName = "Warning"),		// Yellow - Wrong checkpoint, etc.
+	Error		UMETA(DisplayName = "Error"),		// Red - Damage taken, death, etc.
+	Info		UMETA(DisplayName = "Info")			// White - General information
+};
 
 /**
  * Root HUD container widget
@@ -24,6 +37,14 @@ public:
 	/** Programming deck widget (hand + registers) - bind in Blueprint with meta=(BindWidget) */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "HUD")
 	UProgrammingDeckWidget* ProgrammingDeck;
+
+	/** Event log vertical box container - bind in Blueprint with meta=(BindWidget) */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "HUD")
+	UVerticalBox* EventLogBox;
+
+	/** Widget class for event messages (set in Blueprint) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
+	TSubclassOf<UUserWidget> EventMessageWidgetClass;
 
 	/**
 	 * Update health display
@@ -56,12 +77,36 @@ public:
 	void UpdateGameState(EGameState NewState);
 
 	/**
-	 * Add event log message
+	 * Add event log message with color
 	 * @param Message Text to display
 	 * @param MessageColor Color for message text
 	 */
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void AddEventMessage(const FString& Message, FLinearColor MessageColor);
+
+	/**
+	 * Add event log message with type
+	 * @param Message Text to display
+	 * @param MessageType Type of message (Success, Warning, Error, Info)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void AddEventMessageTyped(const FString& Message, EEventMessageType MessageType);
+
+	/**
+	 * Get color for message type
+	 * @param MessageType Type of message
+	 * @return Color for message
+	 */
+	UFUNCTION(BlueprintPure, Category = "HUD")
+	static FLinearColor GetMessageTypeColor(EEventMessageType MessageType);
+
+	/**
+	 * Get icon name for message type
+	 * @param MessageType Type of message
+	 * @return Icon identifier string
+	 */
+	UFUNCTION(BlueprintPure, Category = "HUD")
+	static FString GetMessageTypeIcon(EEventMessageType MessageType);
 
 	/**
 	 * Blueprint event triggered when health changes
@@ -150,6 +195,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "HUD|GameState")
 	FLinearColor GetGameStatePanelColor() const;
 
+	/** Maximum number of event messages to keep in log */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
+	int32 MaxEventMessages = 8;
+
+	/** Duration in seconds before event message fades out */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "HUD")
+	float EventMessageDuration = 5.0f;
+
 private:
 	/** Current visibility state of programming deck */
 	bool bProgrammingDeckVisible = true;
@@ -167,4 +220,7 @@ private:
 
 	/** Cached game state for helper methods */
 	EGameState CachedGameState = EGameState::Programming;
+
+	/** Remove oldest message from event log if limit exceeded */
+	void TrimEventLog();
 };

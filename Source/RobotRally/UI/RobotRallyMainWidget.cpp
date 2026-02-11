@@ -3,6 +3,9 @@
 #include "RobotRallyMainWidget.h"
 #include "ProgrammingDeckWidget.h"
 #include "../RobotRallyGameMode.h"
+#include "Components/VerticalBox.h"
+#include "Blueprint/UserWidget.h"
+#include "TimerManager.h"
 
 void URobotRallyMainWidget::UpdateHealth(int32 CurrentHealth, int32 MaxHealth)
 {
@@ -51,6 +54,96 @@ void URobotRallyMainWidget::AddEventMessage(const FString& Message, FLinearColor
 {
 	// Trigger Blueprint event for visual update
 	OnEventMessageAdded(Message, MessageColor);
+
+	// If EventLogBox and EventMessageWidgetClass are set, create widget
+	if (EventLogBox && EventMessageWidgetClass)
+	{
+		// Create message widget
+		UUserWidget* MessageWidget = CreateWidget<UUserWidget>(GetWorld(), EventMessageWidgetClass);
+		if (MessageWidget)
+		{
+			// Add to event log
+			EventLogBox->AddChild(MessageWidget);
+
+			// Trim old messages if limit exceeded
+			TrimEventLog();
+
+			// Set up auto-removal timer
+			FTimerHandle RemovalTimer;
+			FTimerDelegate RemovalDelegate;
+			RemovalDelegate.BindLambda([MessageWidget]()
+			{
+				if (MessageWidget && MessageWidget->IsValidLowLevel())
+				{
+					MessageWidget->RemoveFromParent();
+				}
+			});
+
+			GetWorld()->GetTimerManager().SetTimer(RemovalTimer, RemovalDelegate, EventMessageDuration, false);
+		}
+	}
+}
+
+void URobotRallyMainWidget::AddEventMessageTyped(const FString& Message, EEventMessageType MessageType)
+{
+	FLinearColor Color = GetMessageTypeColor(MessageType);
+	AddEventMessage(Message, Color);
+}
+
+FLinearColor URobotRallyMainWidget::GetMessageTypeColor(EEventMessageType MessageType)
+{
+	switch (MessageType)
+	{
+	case EEventMessageType::Success:
+		// Green: #7ED321
+		return FLinearColor(0.49f, 0.83f, 0.13f, 1.0f);
+	case EEventMessageType::Warning:
+		// Yellow: #F5A623
+		return FLinearColor(0.96f, 0.65f, 0.14f, 1.0f);
+	case EEventMessageType::Error:
+		// Red: #D0021B
+		return FLinearColor(0.82f, 0.01f, 0.11f, 1.0f);
+	case EEventMessageType::Info:
+	default:
+		// White
+		return FLinearColor(1.0f, 1.0f, 1.0f, 1.0f);
+	}
+}
+
+FString URobotRallyMainWidget::GetMessageTypeIcon(EEventMessageType MessageType)
+{
+	switch (MessageType)
+	{
+	case EEventMessageType::Success:
+		return TEXT("✓"); // Checkmark
+	case EEventMessageType::Warning:
+		return TEXT("⚠"); // Warning triangle
+	case EEventMessageType::Error:
+		return TEXT("✖"); // X mark
+	case EEventMessageType::Info:
+	default:
+		return TEXT("ℹ"); // Info symbol
+	}
+}
+
+void URobotRallyMainWidget::TrimEventLog()
+{
+	if (!EventLogBox)
+	{
+		return;
+	}
+
+	// Remove oldest messages if limit exceeded
+	int32 ChildCount = EventLogBox->GetChildrenCount();
+	while (ChildCount > MaxEventMessages)
+	{
+		UWidget* OldestMessage = EventLogBox->GetChildAt(0);
+		if (OldestMessage)
+		{
+			OldestMessage->RemoveFromParent();
+		}
+		ChildCount = EventLogBox->GetChildrenCount();
+	}
 }
 
 void URobotRallyMainWidget::SetProgrammingDeckVisible(bool bVisible)
