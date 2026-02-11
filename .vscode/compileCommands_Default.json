@@ -1,0 +1,186 @@
+[
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\GridManager.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\GridManager.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotAIController.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotAIController.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotController.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotController.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotMovementComponent.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotMovementComponent.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotPawn.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotPawn.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRally.Build.cs",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRally.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRally.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyGameInstance.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyGameInstance.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyGameMode.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyGameMode.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyGameState.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyGameState.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyHUD.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyHUD.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyPlayerState.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	},
+	{
+		"file": "H:\\Repos\\RoboRallyUe5\\Source\\RobotRally\\RobotRallyPlayerState.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"@H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default\\RobotRally.1.rsp"
+		],
+		"directory": "T:\\EpicGames\\UE_5.7\\Engine\\Source"
+	}
+]

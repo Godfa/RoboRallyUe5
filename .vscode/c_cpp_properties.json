@@ -1,0 +1,20 @@
+{
+	"configurations": [
+		{
+			"name": "RobotRallyEditor Editor Win64 Development (RobotRally)",
+			"compilerPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"cStandard": "c17",
+			"cppStandard": "c++20",
+			"intelliSenseMode": "msvc-x64",
+			"compileCommands": "H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_RobotRally.json"
+		},
+		{
+			"name": "Win32",
+			"compilerPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+			"cStandard": "c17",
+			"cppStandard": "c++20",
+			"intelliSenseMode": "msvc-x64",
+			"compileCommands": "H:\\Repos\\RoboRallyUe5\\.vscode\\compileCommands_Default.json"
+		}
+	]
+}
