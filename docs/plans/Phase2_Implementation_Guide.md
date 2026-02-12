@@ -17,7 +17,9 @@ The C++ CardWidget class has been enhanced with helper methods:
 - ✅ `GetCardActionName()` - Returns display text ("Move 1", "Rotate Right", etc.)
 - ✅ `GetCardTypeColor()` - Returns background color based on card type
 - ✅ `GetPriorityBadgeColor()` - Returns badge color based on priority value
-- ✅ `GetCardIconName()` - Returns icon texture name for asset lookup
+- ✅ `GetCardIconName()` - Returns icon texture name for asset lookup (legacy)
+- ✅ `GetCardIcon()` - Returns UTexture2D* from ActionIcons TMap (production method)
+- ✅ `ActionIcons` - TMap<ECardAction, UTexture2D*> for icon configuration
 
 **Color Scheme Implemented:**
 - **Movement Cards** (Move 1/2/3): Light Blue (#4A90E2)
@@ -97,7 +99,36 @@ Create 7 icon textures for card actions. Each icon should be:
 2. Search for and select: `CardWidget` (your C++ class)
 3. Save the Blueprint
 
-### Step 3: Design the Widget Layout
+### Step 3: Configure ActionIcons TMap (Class Defaults)
+
+**IMPORTANT**: Before designing the layout, configure the icon mapping in Class Defaults.
+
+1. In Blueprint Editor, click **Class Settings** (toolbar) or press **Ctrl+Shift+C**
+2. In **Details** panel, find **Card Icons** category
+3. Expand **Action Icons** TMap
+4. Click **[+]** to add 7 entries:
+
+| Key (ECardAction) | Value (Texture2D) |
+|-------------------|-------------------|
+| Move1 | T_Icon_Move1 |
+| Move2 | T_Icon_Move2 |
+| Move3 | T_Icon_Move3 |
+| MoveBack | T_Icon_MoveBack |
+| RotateRight | T_Icon_RotateRight |
+| RotateLeft | T_Icon_RotateLeft |
+| UTurn | T_Icon_UTurn |
+
+**How to assign textures:**
+- Click dropdown arrow next to **Value** field
+- Search for icon name (e.g., "T_Icon_Move1")
+- Select the Texture2D asset
+- OR: Drag from Content Browser directly into Value field
+
+5. **Save** the Blueprint (Ctrl+S)
+
+---
+
+### Step 4: Design the Widget Layout
 
 **Root Widget: Size Box**
 - Add **Size Box** as root
@@ -158,7 +189,7 @@ Create 7 icon textures for card actions. Each icon should be:
   - Justification: Center
   - Color: Black (for contrast on colored badge)
 
-### Step 4: Implement OnCardDataChanged Event
+### Step 5: Implement OnCardDataChanged Event
 
 1. In the **Graph** tab, find the inherited event: `OnCardDataChanged`
    (If not visible, click **Override** dropdown and add it)
@@ -174,16 +205,17 @@ Event OnCardDataChanged
 │   └─ Text: ToText(CardData.Priority)
 │
 └─> Set Brush from Texture (CardIconImage)
-    └─ Texture: Load based on GetCardIconName()
-       (Use "Make Literal SoftObjectPath" and "Load Asset Async")
+    └─ Texture: GetCardIcon()
 ```
 
 **Detailed Blueprint Nodes:**
 1. **Get Card Action Name** → **Set Text** (ActionTextBlock)
 2. **Get** CardData → **Break FRobotCard** → Get Priority → **To Text** → **Set Text** (PriorityTextBlock)
-3. **Get Card Icon Name** → **Append** "/Game/RobotRally/UI/Textures/Icons/" → **Make Soft Object Path** → **Load Asset (Texture2D)** → **Set Brush from Texture** (CardIconImage)
+3. **Get Card Icon** (pure function, no execution pin needed) → **Set Brush from Texture** (CardIconImage)
 
-### Step 5: Implement OnCardStateChanged Event
+**Note:** The new `GetCardIcon()` method automatically retrieves the texture from the ActionIcons TMap configured in Class Defaults. No string concatenation or asset loading needed!
+
+### Step 6: Implement OnCardStateChanged Event
 
 1. Add the inherited event: `OnCardStateChanged`
 
@@ -218,7 +250,7 @@ Event OnCardStateChanged
        └─ Desaturate colors
 ```
 
-### Step 6: Add Border for Visual States (Optional)
+### Step 7: Add Border for Visual States (Optional)
 
 To make states more visible, add a **Border** widget:
 1. Insert **Border** between Size Box and Overlay
@@ -230,7 +262,7 @@ To make states more visible, add a **Border** widget:
 
 Update `OnCardStateChanged` to modify `CardBorder` color based on state.
 
-### Step 7: Compile and Test
+### Step 8: Compile and Test
 
 1. Click **Compile** in the Blueprint editor
 2. Save the Blueprint
@@ -357,6 +389,7 @@ Once Phase 2 is complete, Phase 3 will:
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-02-11
+**Document Version**: 1.1
+**Last Updated**: 2026-02-12
 **Author**: RobotRally Development Team
+**Changes in v1.1**: Added production-grade C++ TMap icon system (ActionIcons), replaced string-based asset loading with GetCardIcon()
