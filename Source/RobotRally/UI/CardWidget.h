@@ -106,4 +106,20 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Card")
 	FString GetCardIconName() const;
+
+	/**
+	 * Get texture icon for current card action
+	 * Returns nullptr if icon not assigned in ActionIcons map
+	 * @return Texture2D asset for card icon
+	 */
+	UFUNCTION(BlueprintPure, Category = "Card")
+	UTexture2D* GetCardIcon() const;
+
+protected:
+	/**
+	 * Map of card actions to icon textures
+	 * Assign these in Blueprint Class Defaults (WBP_CardSlot)
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Card Icons")
+	TMap<ECardAction, UTexture2D*> ActionIcons;
 };

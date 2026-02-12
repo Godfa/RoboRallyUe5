@@ -2,6 +2,7 @@
 
 #include "CardWidget.h"
 #include "../RobotRallyGameMode.h"
+#include "Engine/Texture2D.h"
 
 void UCardWidget::SetCardData(const FRobotCard& InCard, int32 InHandIndex)
 {
@@ -114,4 +115,16 @@ FString UCardWidget::GetCardIconName() const
 	default:
 		return TEXT("T_Icon_Unknown");
 	}
+}
+
+UTexture2D* UCardWidget::GetCardIcon() const
+{
+	// Lookup icon from ActionIcons map
+	if (UTexture2D* const* FoundIcon = ActionIcons.Find(CardData.Action))
+	{
+		return *FoundIcon;
+	}
+
+	// Return nullptr if not found (Blueprint should handle gracefully)
+	return nullptr;
 }
