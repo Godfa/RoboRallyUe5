@@ -41,7 +41,7 @@ public:
 
 	/** Use UMG widgets instead of Canvas drawing (Phase 5+) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
-	bool bUseUMGWidgets = true;
+	bool bUseUMGWidgets = false;
 
 	/** Show Canvas HUD even when UMG is active (useful during migration) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI|Debug")
